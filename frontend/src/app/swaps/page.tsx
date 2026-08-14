@@ -1,48 +1,76 @@
 "use client";
 
 /**
- * Swap marketplace (8.6): propose with balance shown inline and client-side
- * over-offer blocking, a plain-words confirmation step, incoming accepts and
- * rejects, outgoing with status.
+ * Trades. A trade is a two-sided request: you propose, and nothing moves
+ * until the other person accepts. The UI says so explicitly — the earlier
+ * version left that mechanism invisible.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
 import {
   acceptSwap,
-  ApiError,
   createSwap,
   listSwaps,
   listUsers,
+  messageFrom,
   rejectSwap,
 } from "@/lib/api";
 import { useApp } from "@/lib/app-context";
-import {
-  CATEGORIES,
-  type CreditCategory,
-  type SwapItem,
-  type UserInfo,
-} from "@/lib/types";
+import { useSessionGuard } from "@/lib/useSessionGuard";
+import { CATEGORIES, type CreditCategory, type SwapItem, type UserInfo } from "@/lib/types";
 import { formatDateTime } from "@/lib/format";
 import { Button } from "@/components/primitives/Button";
-import { CategoryDot } from "@/components/primitives/CategoryDot";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
 import { ErrorPanel } from "@/components/primitives/ErrorPanel";
 import { SkeletonRows } from "@/components/primitives/Skeleton";
 import { SwapStatusBadge } from "@/components/primitives/StatusBadge";
+import { CATEGORY_COLOR } from "@/components/primitives/CategoryDot";
 
-function categorySelect(
-  id: string,
-  value: CreditCategory,
-  onChange: (c: CreditCategory) => void,
-) {
+/** One side of a trade, in its category colour. */
+function Side({
+  label,
+  category,
+  amount,
+}: {
+  label: string;
+  category: CreditCategory;
+  amount: number;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="t-label" style={{ fontSize: 12 }}>
+        {label}
+      </span>
+      <span className="flex items-baseline gap-2">
+        <span
+          aria-hidden
+          className="inline-block h-2.5 w-2.5 shrink-0"
+          style={{ background: CATEGORY_COLOR[category] }}
+        />
+        <span className="mono-20 text-primary">{amount.toFixed(1)}</span>
+        <span className="t-12 text-secondary">{category}</span>
+      </span>
+    </div>
+  );
+}
+
+function CategorySelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: CreditCategory;
+  onChange: (c: CreditCategory) => void;
+}) {
   return (
     <select
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value as CreditCategory)}
-      className="input-instrument text-sm"
+      className="field t-14"
     >
       {CATEGORIES.map((c) => (
         <option key={c} value={c}>
@@ -73,7 +101,7 @@ function ProposePanel({ onCreated }: { onCreated: () => void }) {
         setUsers(l.users);
         setCounterparty((prev) => prev || l.users[0]?.id || "");
       })
-      .catch((e) => setUsersError(e instanceof ApiError ? e.message : "Users could not be loaded"));
+      .catch((e) => setUsersError(messageFrom(e, "Traders could not be loaded")));
   }, []);
 
   useEffect(() => {
@@ -84,15 +112,16 @@ function ProposePanel({ onCreated }: { onCreated: () => void }) {
   const available = balance?.balances[offerCategory] ?? null;
   const offer = Number(offerAmount);
   const want = Number(wantAmount);
+  const overOffering = available != null && offer > available;
 
   const validation = useMemo((): string | null => {
-    if (!counterparty) return "Pick who to trade with";
+    if (!counterparty) return "Choose who to trade with.";
     if (!offerAmount || !wantAmount || offer <= 0 || want <= 0)
-      return "Amounts must be greater than zero";
-    if (available != null && offer > available)
-      return `You don't have enough ${offerCategory} credits`;
+      return "Both amounts must be greater than zero.";
+    if (overOffering)
+      return `You hold ${available?.toFixed(1)} ${offerCategory} credits but offered ${offer.toFixed(1)}.`;
     return null;
-  }, [counterparty, offerAmount, wantAmount, offer, want, available, offerCategory]);
+  }, [counterparty, offerAmount, wantAmount, offer, want, overOffering, available, offerCategory]);
 
   const counterpartyName = users?.find((u) => u.id === counterparty)?.name ?? "";
 
@@ -113,36 +142,40 @@ function ProposePanel({ onCreated }: { onCreated: () => void }) {
       onCreated();
     } catch (e) {
       setConfirming(false);
-      setError(e instanceof ApiError ? e.message : "The trade could not be created");
+      setError(messageFrom(e, "The trade request could not be sent"));
     } finally {
       setBusy(false);
     }
   };
 
-  if (usersError) {
-    return <ErrorPanel message={usersError} onRetry={loadUsers} />;
-  }
+  if (usersError) return <ErrorPanel message={usersError} onRetry={loadUsers} />;
 
   return (
-    <section aria-label="Propose a trade" className="surface-shelf p-6">
-      <span className="type-label-xs mb-4 block">Propose a trade</span>
+    <section aria-label="Propose a trade" className="panel p-6">
+      <span className="t-label">Propose a trade</span>
+      <p className="t-14 mt-1 text-secondary">
+        You send a request. Nothing moves until they accept it.
+      </p>
+
       {users == null ? (
-        <SkeletonRows count={2} />
+        <div className="mt-5">
+          <SkeletonRows count={2} />
+        </div>
       ) : users.length === 0 ? (
-        <p className="text-sm text-graticule">
-          There is no one to trade with yet — other users will appear here.
+        <p className="t-14 mt-5 text-secondary">
+          No one else is holding credits yet. Other traders appear here as they join.
         </p>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="mt-5 flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="swap-counterparty" className="type-label-xs">
+            <label htmlFor="counterparty" className="t-label">
               Trade with
             </label>
             <select
-              id="swap-counterparty"
+              id="counterparty"
               value={counterparty}
               onChange={(e) => setCounterparty(e.target.value)}
-              className="input-instrument w-full max-w-xs text-sm"
+              className="field t-14 w-full max-w-xs"
             >
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
@@ -152,13 +185,17 @@ function ProposePanel({ onCreated }: { onCreated: () => void }) {
             </select>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="offer-amount" className="type-label-xs">
+              <label htmlFor="offer-amount" className="t-label">
                 You give
               </label>
               <div className="flex gap-2">
-                {categorySelect("offer-category", offerCategory, setOfferCategory)}
+                <CategorySelect
+                  id="offer-category"
+                  value={offerCategory}
+                  onChange={setOfferCategory}
+                />
                 <input
                   id="offer-amount"
                   type="number"
@@ -167,21 +204,29 @@ function ProposePanel({ onCreated }: { onCreated: () => void }) {
                   value={offerAmount}
                   onChange={(e) => setOfferAmount(e.target.value)}
                   placeholder="0.0"
-                  className="type-mono-m input-instrument w-24"
+                  aria-invalid={overOffering}
+                  className="field mono-14 w-24"
                 />
               </div>
-              {available != null && (
-                <span className="type-mono-s text-graticule">
-                  {available.toFixed(1)} {offerCategory} available
-                </span>
-              )}
+              <span className={`mono-12 ${overOffering ? "text-[var(--alert)]" : "text-muted"}`}>
+                {available != null ? `${available.toFixed(1)} available` : "—"}
+              </span>
             </div>
+
+            <span aria-hidden className="mono-20 hidden pb-7 text-muted sm:block">
+              ⇄
+            </span>
+
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="want-amount" className="type-label-xs">
+              <label htmlFor="want-amount" className="t-label">
                 You get
               </label>
               <div className="flex gap-2">
-                {categorySelect("want-category", wantCategory, setWantCategory)}
+                <CategorySelect
+                  id="want-category"
+                  value={wantCategory}
+                  onChange={setWantCategory}
+                />
                 <input
                   id="want-amount"
                   type="number"
@@ -190,58 +235,58 @@ function ProposePanel({ onCreated }: { onCreated: () => void }) {
                   value={wantAmount}
                   onChange={(e) => setWantAmount(e.target.value)}
                   placeholder="0.0"
-                  className="type-mono-m input-instrument w-24"
+                  className="field mono-14 w-24"
                 />
               </div>
+              <span className="mono-12 text-muted">from {counterpartyName || "them"}</span>
             </div>
           </div>
 
           {error && (
-            <p role="alert" className="text-sm text-oxide">
+            <p role="alert" className="t-14 shake text-[var(--alert)]">
               {error}
             </p>
           )}
 
-          <div>
+          <div className="flex items-center gap-3">
             <Button
+              disabled={validation != null}
               onClick={() => {
-                if (validation) {
-                  setError(validation);
-                  return;
-                }
                 setError(null);
                 setConfirming(true);
               }}
             >
-              Propose trade
+              Review trade
             </Button>
+            {validation && <span className="mono-12 text-muted">{validation}</span>}
           </div>
         </div>
       )}
 
       <ConfirmDialog
         open={confirming}
-        title="Confirm the trade"
-        confirmLabel="Send proposal"
+        title="Send this trade request?"
+        confirmLabel="Send request"
         busy={busy}
         onConfirm={submit}
         onCancel={() => setConfirming(false)}
       >
-        You give{" "}
-        <strong>
-          {offer ? offer.toFixed(1) : "0"} {offerCategory}
-        </strong>{" "}
-        credits to {counterpartyName || "them"}, and get{" "}
-        <strong>
-          {want ? want.toFixed(1) : "0"} {wantCategory}
-        </strong>{" "}
-        credits back. {counterpartyName || "They"} must accept before anything moves.
+        <span className="block">
+          You give <strong className="text-primary">{offer.toFixed(1)} {offerCategory}</strong>{" "}
+          and receive{" "}
+          <strong className="text-primary">{want.toFixed(1)} {wantCategory}</strong> from{" "}
+          {counterpartyName || "them"}.
+        </span>
+        <span className="mt-3 block text-muted">
+          Your credits stay yours until {counterpartyName || "they"} accepts. You can
+          withdraw nothing once accepted — the ledger settles both sides at once.
+        </span>
       </ConfirmDialog>
     </section>
   );
 }
 
-function SwapRow({
+function TradeRow({
   swap,
   incoming,
   onAccept,
@@ -255,61 +300,74 @@ function SwapRow({
   busyId?: string | null;
 }) {
   const busy = busyId === swap.swap_id;
+  // For incoming, they give what they offered and want yours; mirrored for outgoing.
+  const youGet = incoming ? swap.they_offer : swap.they_want;
+  const youGive = incoming ? swap.they_want : swap.they_offer;
+
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-      <div className="min-w-0">
-        <p className="text-sm text-airglow">
-          {incoming ? (
+    <li className="border-b border-line px-5 py-4 last:border-b-0">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="t-14 text-primary">
+            {incoming ? (
+              <>
+                <strong>{swap.counterparty.name}</strong> wants to trade with you
+              </>
+            ) : (
+              <>
+                You asked <strong>{swap.counterparty.name}</strong>
+              </>
+            )}
+          </p>
+          <p className="mono-12 mt-0.5 text-muted">{formatDateTime(swap.created_at)}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {incoming && swap.status === "pending" ? (
             <>
-              <strong>{swap.counterparty.name}</strong> offers{" "}
-              <span className="type-mono-m">{swap.they_offer.amount.toFixed(1)}</span>{" "}
-              <CategoryDot category={swap.they_offer.category} /> {swap.they_offer.category} for
-              your <span className="type-mono-m">{swap.they_want.amount.toFixed(1)}</span>{" "}
-              <CategoryDot category={swap.they_want.category} /> {swap.they_want.category}
+              <Button onClick={() => onAccept?.(swap.swap_id)} disabled={busy}>
+                {busy ? "Settling…" : "Accept"}
+              </Button>
+              <Button variant="ghost" onClick={() => onReject?.(swap.swap_id)} disabled={busy}>
+                Decline
+              </Button>
             </>
           ) : (
-            <>
-              You offered <span className="type-mono-m">{swap.they_offer.amount.toFixed(1)}</span>{" "}
-              <CategoryDot category={swap.they_offer.category} /> {swap.they_offer.category} to{" "}
-              <strong>{swap.counterparty.name}</strong> for{" "}
-              <span className="type-mono-m">{swap.they_want.amount.toFixed(1)}</span>{" "}
-              <CategoryDot category={swap.they_want.category} /> {swap.they_want.category}
-            </>
+            <SwapStatusBadge status={swap.status} />
           )}
-        </p>
-        <p className="type-mono-s mt-1 text-graticule">{formatDateTime(swap.created_at)}</p>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {incoming && swap.status === "pending" ? (
-          <>
-            <Button onClick={() => onAccept?.(swap.swap_id)} disabled={busy}>
-              {busy ? "Trading…" : "Accept"}
-            </Button>
-            <Button variant="ghost" onClick={() => onReject?.(swap.swap_id)} disabled={busy}>
-              Decline
-            </Button>
-          </>
-        ) : (
-          <SwapStatusBadge status={swap.status} />
-        )}
+      <div className="mt-4 flex flex-wrap items-center gap-x-10 gap-y-3">
+        <Side label="You give" category={youGive.category} amount={youGive.amount} />
+        <span aria-hidden className="mono-16 text-muted">
+          ⇄
+        </span>
+        <Side label="You get" category={youGet.category} amount={youGet.amount} />
       </div>
     </li>
   );
 }
 
 export default function SwapsPage() {
-  const [swaps, setSwaps] = useState<{ incoming: SwapItem[]; outgoing: SwapItem[] } | null>(null);
+  const ready = useSessionGuard();
+  const [swaps, setSwaps] = useState<{ incoming: SwapItem[]; outgoing: SwapItem[] } | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const { refreshBalance, currentUserId } = useApp();
+  const seq = useRef(0);
 
   const load = useCallback(async () => {
+    const mySeq = ++seq.current;
     try {
-      setSwaps(await listSwaps());
+      const data = await listSwaps();
+      if (mySeq !== seq.current) return;
+      setSwaps(data);
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Swaps could not be loaded");
+      if (mySeq !== seq.current) return;
+      setError(messageFrom(e, "Trades could not be loaded"));
     }
   }, []);
 
@@ -327,7 +385,7 @@ export default function SwapsPage() {
       await load();
       refreshBalance();
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "The trade could not be completed");
+      setActionError(messageFrom(e, "The trade could not be completed"));
       await load();
     } finally {
       setBusyId(null);
@@ -341,47 +399,59 @@ export default function SwapsPage() {
       await rejectSwap(id);
       await load();
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "The swap could not be declined");
+      setActionError(messageFrom(e, "The trade could not be declined"));
     } finally {
       setBusyId(null);
     }
   };
 
+  if (!ready) return null;
+
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <header>
-        <h1 className="type-display-l">Swaps</h1>
-        <p className="mt-1 text-sm text-graticule">
-          Trade credits with other users. Nothing moves until both sides agree.
+        <span className="t-label">Marketplace</span>
+        <h1 className="t-40 mt-2 text-primary">Trades</h1>
+        <p className="t-14 mt-2 max-w-xl text-secondary">
+          Credits come in four categories. Trading swaps one category for another with
+          someone who needs the opposite of what you hold.
         </p>
       </header>
 
       <ProposePanel onCreated={load} />
 
-      {actionError && <ErrorPanel message={actionError} onRetry={() => setActionError(null)} />}
+      {actionError && (
+        <ErrorPanel message={actionError} onRetry={() => setActionError(null)} retryLabel="Dismiss" />
+      )}
 
       {error ? (
         <ErrorPanel message={error} onRetry={load} />
       ) : swaps == null ? (
-        <div className="surface-shelf p-0">
+        <div className="panel overflow-hidden">
           <SkeletonRows count={3} />
         </div>
       ) : (
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.28 }}
           className="flex flex-col gap-6"
         >
-          <section aria-label="Incoming swaps" className="surface-shelf p-0">
-            <span className="type-label-xs block px-5 pb-1 pt-5">Incoming</span>
+          <section aria-label="Requests to you" className="panel overflow-hidden">
+            <div className="flex items-center justify-between px-5 pb-3 pt-5">
+              <span className="t-label">Requests to you</span>
+              {swaps.incoming.length > 0 && (
+                <span className="mono-12 text-signal">{swaps.incoming.length} waiting</span>
+              )}
+            </div>
             {swaps.incoming.length === 0 ? (
-              <p className="px-5 pb-5 pt-2 text-sm text-graticule">
-                No one has proposed a trade to you. Propose one above to get things moving.
+              <p className="t-14 px-5 pb-5 text-secondary">
+                No one has proposed a trade to you. Send one above to get started.
               </p>
             ) : (
-              <ul className="flex flex-col divide-y divide-[var(--rule)]">
+              <ul className="border-t border-line">
                 {swaps.incoming.map((s) => (
-                  <SwapRow
+                  <TradeRow
                     key={s.swap_id}
                     swap={s}
                     incoming
@@ -394,16 +464,16 @@ export default function SwapsPage() {
             )}
           </section>
 
-          <section aria-label="Outgoing swaps" className="surface-shelf p-0">
-            <span className="type-label-xs block px-5 pb-1 pt-5">Outgoing</span>
+          <section aria-label="Your requests" className="panel overflow-hidden">
+            <span className="t-label block px-5 pb-3 pt-5">Your requests</span>
             {swaps.outgoing.length === 0 ? (
-              <p className="px-5 pb-5 pt-2 text-sm text-graticule">
-                You haven't proposed any trades yet.
+              <p className="t-14 px-5 pb-5 text-secondary">
+                You have not proposed any trades yet.
               </p>
             ) : (
-              <ul className="flex flex-col divide-y divide-[var(--rule)]">
+              <ul className="border-t border-line">
                 {swaps.outgoing.map((s) => (
-                  <SwapRow key={s.swap_id} swap={s} incoming={false} />
+                  <TradeRow key={s.swap_id} swap={s} incoming={false} />
                 ))}
               </ul>
             )}

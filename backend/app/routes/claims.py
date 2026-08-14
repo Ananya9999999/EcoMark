@@ -18,7 +18,13 @@ from fastapi import (
 from sqlmodel import Session, func, select
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-from app.config import ALLOWED_UPLOAD_EXTENSIONS, MAX_UPLOAD_BYTES, UPLOAD_DIR
+from app.config import (
+    ALLOWED_BY_METHOD,
+    MAX_RADIUS_M,
+    MAX_UPLOAD_BYTES,
+    MIN_RADIUS_M,
+    UPLOAD_DIR,
+)
 from app.db import get_session
 from app.deps import get_current_user
 from app.models import (
@@ -81,8 +87,8 @@ def _validate_satellite(body: dict) -> dict:
         raise _fail("Latitude must be between -90 and 90")
     if not -180 <= lng <= 180:
         raise _fail("Longitude must be between -180 and 180")
-    if not 50 <= radius_m <= 50000:
-        raise _fail("Radius must be between 50 m and 50 km")
+    if not MIN_RADIUS_M <= radius_m <= MAX_RADIUS_M:
+        raise _fail("Radius must be between 50 m and 5 km")
 
     before = _parse_date(before_date)
     after = _parse_date(after_date)
@@ -100,10 +106,12 @@ def _validate_satellite(body: dict) -> dict:
     }
 
 
-async def _read_upload(file: UploadFile) -> bytes:
+async def _read_upload(file: UploadFile, method: str) -> bytes:
     ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
-        raise _fail("Upload a JPG, PNG, PDF, GPX or CSV")
+    allowed = ALLOWED_BY_METHOD.get(method, set())
+    if ext not in allowed:
+        readable = ", ".join(sorted(e.lstrip(".").upper() for e in allowed))
+        raise _fail(f"Upload a {readable} file")
     content = await file.read()
     if len(content) > MAX_UPLOAD_BYTES:
         raise _fail("File must be under 10 MB")
@@ -153,7 +161,7 @@ async def create_claim(
     else:
         if file is None:
             raise _fail("This claim needs a file")
-        content = await _read_upload(file)
+        content = await _read_upload(file, method)
         claim = Claim(user_id=user.id, action_type=action_type, method=method,
                       status=ClaimStatus.verifying)
         safe_name = os.path.basename(file.filename or "upload")

@@ -6,7 +6,8 @@ import pytest
 
 
 def _detail(resp):
-    return resp.json()["detail"]
+    """Message from the the spec's error envelope."""
+    return resp.json()["error"]["message"]
 
 
 def _users(client):

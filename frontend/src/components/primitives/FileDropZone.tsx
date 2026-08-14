@@ -4,10 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "./Button";
 
-const ACCEPT = ".jpg,.jpeg,.png,.pdf,.gpx,.csv";
 const MAX_BYTES = 10 * 1024 * 1024;
-const ALLOWED = new Set(["jpg", "jpeg", "png", "pdf", "gpx", "csv"]);
 const IMAGE_EXT = new Set(["jpg", "jpeg", "png"]);
+
+/** Accepted extensions differ by method (§6): OCR reads documents, GPS reads logs. */
+export const ACCEPT_BY_METHOD = {
+  ocr: [".jpg", ".jpeg", ".png", ".pdf"],
+  gps: [".gpx", ".json", ".csv"],
+} as const;
 
 function extensionOf(name: string): string {
   return name.split(".").pop()?.toLowerCase() ?? "";
@@ -18,16 +22,21 @@ function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-/**
- * Drag-and-drop + click-to-browse (8.3 step 2b). Validates with the exact
- * messages from 5.1, previews images, allows remove and replace.
- */
 export function FileDropZone({
   file,
+  accept,
+  hint,
+  reads,
   onChange,
   onError,
 }: {
   file: File | null;
+  /** Extensions this claim accepts, e.g. [".pdf", ".png"] */
+  accept: readonly string[];
+  /** One line describing the document expected. */
+  hint: string;
+  /** Fields the pipeline will read off it — makes each action distinguishable. */
+  reads?: string[];
   onChange: (file: File | null) => void;
   onError: (message: string | null) => void;
 }) {
@@ -44,28 +53,30 @@ export function FileDropZone({
     setPreviewUrl(null);
   }, [file]);
 
+  const allowed = new Set(accept.map((a) => a.replace(".", "")));
+  const readable = accept.map((a) => a.replace(".", "").toUpperCase()).join(", ");
+
   const take = useCallback(
     (candidate: File) => {
-      if (!ALLOWED.has(extensionOf(candidate.name))) {
-        onError("Upload a JPG, PNG, PDF, GPX or CSV");
+      if (!allowed.has(extensionOf(candidate.name))) {
+        onError(`This claim accepts ${readable} files.`);
         return;
       }
       if (candidate.size > MAX_BYTES) {
-        onError("File must be under 10 MB");
+        onError("That file is over 10 MB. Try a smaller scan or a compressed export.");
         return;
       }
       onError(null);
       onChange(candidate);
     },
-    [onChange, onError],
+    [allowed, readable, onChange, onError],
   );
 
-  // One hidden input serves both branches — browse, and replace.
   const hiddenInput = (
     <input
       ref={inputRef}
       type="file"
-      accept={ACCEPT}
+      accept={accept.join(",")}
       aria-label="Choose a file"
       className="sr-only"
       onChange={(e) => {
@@ -78,22 +89,27 @@ export function FileDropZone({
 
   if (file) {
     return (
-      <div className="surface-terrace flex items-center gap-4 p-4">
+      <div className="panel-elevated flex items-center gap-4 p-4">
         {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={previewUrl}
             alt={`Preview of ${file.name}`}
-            className="h-20 w-20 rounded-[var(--radius-row)] object-cover"
+            className="h-20 w-20 rounded-[var(--r-row)] border border-line object-cover"
           />
         ) : (
-          <div className="type-mono-s flex h-20 w-20 items-center justify-center rounded-[var(--radius-row)] bg-night-ocean uppercase text-graticule">
+          <div className="mono-12 flex h-20 w-20 shrink-0 items-center justify-center rounded-[var(--r-row)] border border-line bg-void uppercase text-signal">
             {extensionOf(file.name)}
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm text-airglow">{file.name}</div>
-          <div className="type-mono-s mt-0.5 text-graticule">{formatSize(file.size)}</div>
+          <div className="t-14 truncate text-primary">{file.name}</div>
+          <div className="mono-12 mt-1 text-muted">{formatSize(file.size)}</div>
+          {reads && reads.length > 0 && (
+            <div className="mono-12 mt-2 text-secondary">
+              Will read: {reads.join(" · ")}
+            </div>
+          )}
         </div>
         <div className="flex shrink-0 gap-2">
           <Button variant="secondary" type="button" onClick={() => inputRef.current?.click()}>
@@ -128,13 +144,25 @@ export function FileDropZone({
         const f = e.dataTransfer.files?.[0];
         if (f) take(f);
       }}
-      className={`flex flex-col items-center justify-center gap-2 rounded-[var(--radius-panel)] border border-dashed p-8 transition-colors ${
-        dragOver ? "border-limb bg-[var(--limb-dim)]" : "border-[var(--rule-strong)] bg-shelf"
+      className={`flex flex-col items-center justify-center gap-2 rounded-[var(--r-panel)] border border-dashed p-8 text-center transition-colors ${
+        dragOver ? "border-signal bg-[var(--signal-wash)]" : "border-line bg-surface"
       }`}
     >
-      <p className="text-sm text-airglow">Drop the file here</p>
-      <p className="text-xs text-graticule">JPG, PNG, PDF, GPX or CSV — up to 10 MB</p>
-      <Button variant="secondary" type="button" onClick={() => inputRef.current?.click()}>
+      <p className="t-16 text-primary">{hint}</p>
+      <p className="mono-12 text-muted">
+        {readable} · up to 10 MB
+      </p>
+      {reads && reads.length > 0 && (
+        <p className="mono-12 mt-1 max-w-sm text-secondary">
+          The pipeline will read: {reads.join(" · ")}
+        </p>
+      )}
+      <Button
+        variant="secondary"
+        type="button"
+        className="mt-2"
+        onClick={() => inputRef.current?.click()}
+      >
         Browse files
       </Button>
       {hiddenInput}

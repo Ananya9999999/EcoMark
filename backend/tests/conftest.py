@@ -52,6 +52,17 @@ def no_sleep(monkeypatch):
     monkeypatch.setattr(mv.time, "sleep", lambda *_: None)
 
 
+@pytest.fixture(autouse=True)
+def no_simulated_chain_failures(monkeypatch):
+    """Turn off the id-ending-in-9 failure so unrelated tests are not flaky.
+
+    The tests that care about that behaviour re-enable it explicitly.
+    """
+    import app.integrations.mock_chain as mc
+    monkeypatch.setattr(mc, "SIMULATE_FAILURES", False)
+    monkeypatch.setattr(mc, "_failed_once", set())
+
+
 @pytest.fixture()
 def fresh_chain(monkeypatch):
     """Isolate the mock chain's module-level state per test."""

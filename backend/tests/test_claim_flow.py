@@ -18,7 +18,8 @@ SATELLITE_BODY = {
 
 
 def _detail(resp):
-    return resp.json()["detail"]
+    """Message from the the spec's error envelope."""
+    return resp.json()["error"]["message"]
 
 
 class TestClaimLifecycle:
@@ -81,13 +82,14 @@ class TestClaimLifecycle:
         import app.services.claims as svc
 
         calls = {"n": 0}
-        real_mint = svc.chain.mint_credit
 
         def flaky(**kwargs):
+            # Fails once, then succeeds. Deliberately does not delegate to the
+            # mock chain, whose own simulated failure depends on the claim id.
             calls["n"] += 1
             if calls["n"] == 1:
                 raise RuntimeError("rpc timeout")
-            return real_mint(**kwargs)
+            return "0x" + "a" * 32
 
         monkeypatch.setattr(svc.chain, "mint_credit", flaky)
         resp = client.post("/api/claims", json=SATELLITE_BODY)
@@ -143,9 +145,9 @@ class TestClaimValidation:
 
     def test_radius_out_of_range(self, client):
         r = client.post("/api/claims", json={**SATELLITE_BODY, "radius_m": 49})
-        assert _detail(r) == "Radius must be between 50 m and 50 km"
-        r = client.post("/api/claims", json={**SATELLITE_BODY, "radius_m": 50001})
-        assert _detail(r) == "Radius must be between 50 m and 50 km"
+        assert _detail(r) == "Radius must be between 50 m and 5 km"
+        r = client.post("/api/claims", json={**SATELLITE_BODY, "radius_m": 5001})
+        assert _detail(r) == "Radius must be between 50 m and 5 km"
 
     def test_before_not_earlier(self, client):
         r = client.post("/api/claims", json={**SATELLITE_BODY,
@@ -170,7 +172,18 @@ class TestClaimValidation:
         r = client.post("/api/claims",
                         data={"action_type": "energy_reduction", "method": "ocr"},
                         files={"file": ("bill.exe", io.BytesIO(b"x"), "application/x-exe")})
-        assert _detail(r) == "Upload a JPG, PNG, PDF, GPX or CSV"
+        assert "PDF" in _detail(r)  # OCR claims accept documents, not executables
+
+    def test_gps_accepts_json_rejects_pdf(self, client):
+        ok = client.post("/api/claims",
+                         data={"action_type": "commute", "method": "gps"},
+                         files={"file": ("trip.json", io.BytesIO(b"{}"), "application/json")})
+        assert ok.status_code == 201, ok.text
+        bad = client.post("/api/claims",
+                          data={"action_type": "commute", "method": "gps"},
+                          files={"file": ("trip.pdf", io.BytesIO(b"%PDF"), "application/pdf")})
+        assert bad.status_code == 422
+        assert "GPX" in _detail(bad)
 
     def test_upload_saved_with_claim_id_prefix(self, client):
         from app.config import UPLOAD_DIR

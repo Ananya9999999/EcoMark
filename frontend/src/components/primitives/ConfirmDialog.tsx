@@ -4,7 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 import { Button } from "./Button";
 
-/** Native <dialog>-based confirmation — focus trapping and Esc for free. */
+/** Native <dialog> — focus trapping, Esc and the backdrop come for free. */
 export function ConfirmDialog({
   open,
   title,
@@ -41,11 +41,11 @@ export function ConfirmDialog({
       onClick={(e) => {
         if (e.target === ref.current) onCancel();
       }}
-      className="m-auto w-full max-w-md bg-transparent p-4 backdrop:bg-black/60"
+      className="m-auto w-full max-w-md bg-transparent p-4 backdrop:bg-black/70 backdrop:backdrop-blur-sm"
     >
-      <div className="surface-terrace rounded-[var(--radius-panel)] p-6">
-        <h2 className="type-display-m mb-3">{title}</h2>
-        <div className="mb-5 text-sm text-airglow">{children}</div>
+      <div className="panel-elevated rounded-[var(--r-panel)] p-6">
+        <h2 className="t-20 mb-3 text-primary">{title}</h2>
+        <div className="t-14 mb-6 text-secondary">{children}</div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onCancel} disabled={busy}>
             Cancel

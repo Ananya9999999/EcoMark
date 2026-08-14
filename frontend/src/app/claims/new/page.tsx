@@ -1,37 +1,78 @@
 "use client";
 
 /**
- * New claim (8.3): choose the action, provide the evidence, submit.
- * Client-side validation uses the exact messages from 5.1. On success the
- * router moves to the claim detail page, where the verification wait plays.
+ * Log an action. One flow, but step 2 genuinely differs by verification
+ * method — a location cascade for satellite claims, a document drop that
+ * names the fields it will read for OCR, a trip-log drop for GPS. The five
+ * upload actions are not interchangeable and should not look it.
  */
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 
-import { ApiError, createClaimFile, createClaimJson } from "@/lib/api";
+import { createClaimFile, createClaimJson, messageFrom } from "@/lib/api";
+import { useSessionGuard } from "@/lib/useSessionGuard";
 import {
   ACTION_LABELS,
   ACTION_METHODS,
   type ActionType,
-  type VerificationMethod,
+  type CreditCategory,
 } from "@/lib/types";
 import { Button } from "@/components/primitives/Button";
-import { FileDropZone } from "@/components/primitives/FileDropZone";
+import { ACCEPT_BY_METHOD, FileDropZone } from "@/components/primitives/FileDropZone";
 import { CoordinateInput, type Coordinates } from "@/components/globe/CoordinateInput";
+import { CATEGORY_COLOR } from "@/components/primitives/CategoryDot";
 
 type SelectableAction = Exclude<ActionType, "fail_test">;
 
-const ACTIONS = Object.keys(ACTION_LABELS) as SelectableAction[];
-
-const METHOD_HINT: Record<VerificationMethod, string> = {
-  satellite: "Verified from orbit — drop a pin on the parcel and set the period.",
-  ocr: "Verified from the document — upload the invoice or bill.",
-  gps: "Verified from the trip log — upload the GPS file.",
+/** What each action needs, and what the pipeline reads off it. */
+const ACTION_SPEC: Record<
+  SelectableAction,
+  { category: CreditCategory; blurb: string; prompt: string; reads: string[] }
+> = {
+  tree_planting: {
+    category: "land",
+    blurb: "Verified from orbit by comparing vegetation before and after.",
+    prompt: "",
+    reads: [],
+  },
+  solar_install: {
+    category: "energy",
+    blurb: "Verified from your installation invoice.",
+    prompt: "Drop the solar invoice",
+    reads: ["vendor", "invoice date", "system size", "amount"],
+  },
+  ev_purchase: {
+    category: "transport",
+    blurb: "Verified from the vehicle purchase invoice.",
+    prompt: "Drop the vehicle invoice",
+    reads: ["dealer", "purchase date", "model", "amount"],
+  },
+  energy_reduction: {
+    category: "energy",
+    blurb: "Verified by comparing this bill against your previous period.",
+    prompt: "Drop the electricity bill",
+    reads: ["provider", "billing period", "units kWh", "previous kWh"],
+  },
+  water_reduction: {
+    category: "water",
+    blurb: "Verified by comparing this bill against your previous period.",
+    prompt: "Drop the water bill",
+    reads: ["provider", "billing period", "units kL", "previous kL"],
+  },
+  commute: {
+    category: "transport",
+    blurb: "Verified from your trip log by matching low-carbon routes.",
+    prompt: "Drop the trip log",
+    reads: ["distance", "trips", "mode", "route match"],
+  },
 };
 
+const ACTIONS = Object.keys(ACTION_LABELS) as SelectableAction[];
+
 export default function NewClaimPage() {
+  const ready = useSessionGuard();
   const router = useRouter();
   const [action, setAction] = useState<SelectableAction | null>(null);
   const [coords, setCoords] = useState<Coordinates>({ lat: null, lng: null, radius_m: 500 });
@@ -42,21 +83,22 @@ export default function NewClaimPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const method = action ? ACTION_METHODS[action] : null;
+  const spec = action ? ACTION_SPEC[action] : null;
 
   const validationError = useMemo((): string | null => {
     if (!action || !method) return null;
     if (method === "satellite") {
       const { lat, lng, radius_m } = coords;
       if (lat == null || lng == null || !beforeDate || !afterDate) {
-        return "Satellite claims need a location, a radius and both dates";
+        return "Pick a location on the globe and set both dates.";
       }
-      if (lat < -90 || lat > 90) return "Latitude must be between -90 and 90";
-      if (lng < -180 || lng > 180) return "Longitude must be between -180 and 180";
-      if (radius_m < 50 || radius_m > 50000) return "Radius must be between 50 m and 50 km";
-      if (!(beforeDate < afterDate)) return "The before date must come first";
+      if (lat < -90 || lat > 90) return "Latitude must be between -90 and 90.";
+      if (lng < -180 || lng > 180) return "Longitude must be between -180 and 180.";
+      if (radius_m < 50 || radius_m > 5000) return "Radius must be between 50 m and 5 km.";
+      if (!(beforeDate < afterDate)) return "The before date must come first.";
       return null;
     }
-    if (!file) return "This claim needs a file";
+    if (!file) return "This claim needs a file.";
     return null;
   }, [action, method, coords, beforeDate, afterDate, file]);
 
@@ -83,26 +125,37 @@ export default function NewClaimPage() {
           : await createClaimFile(action, method, file!);
       router.push(`/claims/${created.claim_id}`);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "The claim could not be submitted");
+      setError(messageFrom(e, "The claim could not be submitted"));
       setSubmitting(false);
     }
   };
 
+  if (!ready) return null;
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
       <header>
-        <h1 className="type-display-l">Make a claim</h1>
-        <p className="mt-1 text-sm text-graticule">
-          Log the action you took. The right verification method follows from the action.
+        <span className="t-label">New record</span>
+        <h1 className="t-40 mt-2 text-primary">Log an action</h1>
+        <p className="t-14 mt-2 text-secondary">
+          Choose what you did. The verification method follows from the action.
         </p>
       </header>
 
-      {/* Step 1 — choose the action */}
+      {/* Step 1 — the action */}
       <section aria-label="Choose the action">
-        <span className="type-label-xs mb-3 block">The action</span>
-        <div role="radiogroup" aria-label="Action type" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="mb-3 flex items-baseline gap-3">
+          <span className="mono-12 text-signal">01</span>
+          <span className="t-label">The action</span>
+        </div>
+        <div
+          role="radiogroup"
+          aria-label="Action type"
+          className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {ACTIONS.map((a) => {
             const active = action === a;
+            const s = ACTION_SPEC[a];
             return (
               <button
                 key={a}
@@ -111,16 +164,24 @@ export default function NewClaimPage() {
                 onClick={() => {
                   setAction(a);
                   setError(null);
+                  setFile(null);
                 }}
-                className={`rounded-[var(--radius-row)] border px-3 py-3 text-left text-sm transition-all ${
+                className={`flex flex-col gap-2 rounded-[var(--r-row)] border p-4 text-left transition-all duration-[var(--d-quick)] ${
                   active
-                    ? "border-limb bg-[var(--limb-dim)] text-airglow"
-                    : "border-[var(--rule)] bg-shelf text-graticule hover:border-[var(--rule-strong)] hover:text-airglow"
+                    ? "border-signal bg-[var(--signal-wash)]"
+                    : "border-line bg-surface hover:-translate-y-px hover:border-signal-dim"
                 }`}
               >
-                {ACTION_LABELS[a]}
-                <span className="type-mono-s mt-1 block text-graticule">
-                  {ACTION_METHODS[a]}
+                <span className="flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="inline-block h-2 w-2 shrink-0"
+                    style={{ background: CATEGORY_COLOR[s.category] }}
+                  />
+                  <span className="mono-12 text-muted">{ACTION_METHODS[a]}</span>
+                </span>
+                <span className={`t-16 ${active ? "text-primary" : "text-secondary"}`}>
+                  {ACTION_LABELS[a]}
                 </span>
               </button>
             );
@@ -128,27 +189,30 @@ export default function NewClaimPage() {
         </div>
       </section>
 
-      {/* Step 2 — evidence */}
-      {action && method && (
+      {/* Step 2 — evidence, shaped by the method */}
+      {action && method && spec && (
         <motion.section
-          key={method === "satellite" ? "satellite" : "file"}
+          key={action}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
+          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
           aria-label="Evidence"
           className="flex flex-col gap-4"
         >
-          <div>
-            <span className="type-label-xs block">The evidence</span>
-            <p className="mt-1 text-sm text-graticule">{METHOD_HINT[method]}</p>
+          <div className="flex items-baseline gap-3">
+            <span className="mono-12 text-signal">02</span>
+            <div>
+              <span className="t-label">The evidence</span>
+              <p className="t-14 mt-1 text-secondary">{spec.blurb}</p>
+            </div>
           </div>
 
           {method === "satellite" ? (
             <>
               <CoordinateInput value={coords} onChange={setCoords} />
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="before-date" className="type-label-xs">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="before-date" className="t-label">
                     Before
                   </label>
                   <input
@@ -156,11 +220,11 @@ export default function NewClaimPage() {
                     type="date"
                     value={beforeDate}
                     onChange={(e) => setBeforeDate(e.target.value)}
-                    className="type-mono-m input-instrument [color-scheme:dark]"
+                    className="field mono-14 [color-scheme:dark]"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="after-date" className="type-label-xs">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="after-date" className="t-label">
                     After
                   </label>
                   <input
@@ -168,13 +232,20 @@ export default function NewClaimPage() {
                     type="date"
                     value={afterDate}
                     onChange={(e) => setAfterDate(e.target.value)}
-                    className="type-mono-m input-instrument [color-scheme:dark]"
+                    className="field mono-14 [color-scheme:dark]"
                   />
                 </div>
               </div>
             </>
           ) : (
-            <FileDropZone file={file} onChange={setFile} onError={setError} />
+            <FileDropZone
+              file={file}
+              accept={ACCEPT_BY_METHOD[method]}
+              hint={spec.prompt}
+              reads={spec.reads}
+              onChange={setFile}
+              onError={setError}
+            />
           )}
         </motion.section>
       )}
@@ -182,15 +253,22 @@ export default function NewClaimPage() {
       {/* Step 3 — submit */}
       {action && (
         <section className="flex flex-col gap-3">
+          <div className="flex items-baseline gap-3">
+            <span className="mono-12 text-signal">03</span>
+            <span className="t-label">Submit</span>
+          </div>
           {error && (
-            <p role="alert" className="text-sm text-oxide">
+            <p role="alert" className="t-14 shake text-[var(--alert)]">
               {error}
             </p>
           )}
-          <div>
+          <div className="flex items-center gap-3">
             <Button onClick={submit} disabled={submitting}>
               {submitting ? "Submitting…" : "Submit claim"}
             </Button>
+            {validationError && !error && (
+              <span className="mono-12 text-muted">{validationError}</span>
+            )}
           </div>
         </section>
       )}

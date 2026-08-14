@@ -16,10 +16,16 @@ const USER_KEY = "carbon-credit:user-id";
 /** Error carrying the backend's human-readable detail message. */
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, detail: string) {
+  /** Machine-readable code from the error envelope, e.g. INSUFFICIENT_BALANCE. */
+  code: string;
+  /** The offending field, when the backend can name one. */
+  field: string | null;
+  constructor(status: number, detail: string, code = "ERROR", field: string | null = null) {
     super(detail);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
+    this.field = field;
   }
 }
 
@@ -54,14 +60,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    let detail = "Something went wrong";
+    let message = "Something went wrong";
+    let code = "ERROR";
+    let field: string | null = null;
     try {
       const body = await response.json();
-      if (typeof body?.detail === "string") detail = body.detail;
+      // Spec §6 envelope, with the legacy `detail` shape as a fallback.
+      if (body?.error && typeof body.error.message === "string") {
+        message = body.error.message;
+        code = body.error.code ?? code;
+        field = body.error.field ?? null;
+      } else if (typeof body?.detail === "string") {
+        message = body.detail;
+      }
     } catch {
       // non-JSON error body — keep the generic message
     }
-    throw new ApiError(response.status, detail);
+    throw new ApiError(response.status, message, code, field);
   }
 
   return (await response.json()) as T;

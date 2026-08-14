@@ -53,7 +53,7 @@ class TestModels:
         session.commit()
         row = session.get(Swap, s.id)
         assert row.status == "pending"
-        assert len(row.id) == 8
+        assert row.id.startswith("swp_")
 
 
 class TestMockVerification:
@@ -113,12 +113,30 @@ class TestMockChain:
         fresh_chain.mint_credit("0xA", "land", 5.0, "c1")
         fresh_chain.mint_credit("0xB", "energy", 3.0, "c2")
         swap_id = fresh_chain.initiate_swap("0xA", "0xB", "land", 5.0, "energy", 3.0)
-        assert len(swap_id) == 8
+        assert swap_id.startswith("swp_")
         assert len(fresh_chain.get_pending_swaps("0xB")) == 1
         fresh_chain.accept_swap(swap_id, "0xB")
         assert fresh_chain.get_balance("0xA") == {"land": 0.0, "energy": 3.0}
         assert fresh_chain.get_balance("0xB") == {"energy": 0.0, "land": 5.0}
         assert fresh_chain.get_pending_swaps("0xB") == []
+
+    def test_simulated_failure_on_id_ending_nine(self, fresh_chain, monkeypatch):
+        """The demo hook (spec 7.4): a claim id ending in 9 fails the first
+        mint so mint_failed is showable, then succeeds so retry is too."""
+        monkeypatch.setattr(fresh_chain, "SIMULATE_FAILURES", True)
+        monkeypatch.setattr(fresh_chain, "_failed_once", set())
+
+        with pytest.raises(Exception):
+            fresh_chain.mint_credit("0xA", "land", 2.0, "clm_abcd1239")
+        # retry of the same claim succeeds
+        tx = fresh_chain.mint_credit("0xA", "land", 2.0, "clm_abcd1239")
+        assert tx.startswith("0x")
+        assert fresh_chain.get_balance("0xA") == {"land": 2.0}
+
+    def test_no_simulated_failure_for_other_ids(self, fresh_chain, monkeypatch):
+        monkeypatch.setattr(fresh_chain, "SIMULATE_FAILURES", True)
+        monkeypatch.setattr(fresh_chain, "_failed_once", set())
+        assert fresh_chain.mint_credit("0xB", "land", 1.0, "clm_abcd1231")
 
     def test_accept_insufficient_raises(self, fresh_chain):
         fresh_chain.mint_credit("0xA", "land", 5.0, "c1")

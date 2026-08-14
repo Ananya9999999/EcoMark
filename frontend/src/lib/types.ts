@@ -66,6 +66,8 @@ export const ACTION_METHODS: Record<Exclude<ActionType, "fail_test">, Verificati
 
 export const CATEGORIES: CreditCategory[] = ["land", "energy", "water", "transport"];
 
+export const METHODS: VerificationMethod[] = ["satellite", "ocr", "gps"];
+
 // ----- API response shapes (Part 5) -----
 
 export interface ClaimCreated {

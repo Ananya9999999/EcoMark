@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS
 from app.db import create_db_and_tables
+from app.errors import register_error_handlers
 from app.routes import balance, claims, swaps, users
 
 
@@ -46,6 +47,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+register_error_handlers(app)
 
 app.include_router(claims.router)
 app.include_router(balance.router)

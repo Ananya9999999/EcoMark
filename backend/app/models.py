@@ -31,7 +31,7 @@ def new_verification_id() -> str:
 
 
 def new_swap_id() -> str:
-    return uuid.uuid4().hex[:8]
+    return f"swp_{uuid.uuid4().hex[:8]}"
 
 
 class ActionType(str, Enum):

@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Claim detail (8.5): header, result, generic evidence panel, mini globe for
- * satellite claims, timeline, retry for mint_failed, calm rejection.
- * Polls every 2 seconds while the status is non-terminal (8.3 step 4).
+ * Claim detail: status thread, result, calibrated confidence, generic
+ * evidence, location, timeline, and the retry path for mint_failed.
+ * Polls every 2s while the status is non-terminal.
  */
 
 import dynamic from "next/dynamic";
@@ -14,44 +14,84 @@ import { motion } from "framer-motion";
 import { getClaim, messageFrom, retryMint } from "@/lib/api";
 import { useApp } from "@/lib/app-context";
 import { usePolling } from "@/lib/usePolling";
-import {
-  actionLabel,
-  isTerminal,
-  type ClaimDetail,
-} from "@/lib/types";
-import { formatDate, formatDateTime, formatLatLng, formatRadius, shortHash } from "@/lib/format";
+import { useSessionGuard } from "@/lib/useSessionGuard";
+import { actionLabel, isTerminal, type ClaimDetail } from "@/lib/types";
+import { formatDate, formatDateTime, formatLatLng, formatRadius } from "@/lib/format";
 import { Button } from "@/components/primitives/Button";
 import { ErrorPanel } from "@/components/primitives/ErrorPanel";
 import { SkeletonBlock } from "@/components/primitives/Skeleton";
 import { StatusBadge } from "@/components/primitives/StatusBadge";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
-import { CategoryDot } from "@/components/primitives/CategoryDot";
+import { CATEGORY_COLOR } from "@/components/primitives/CategoryDot";
 import { EvidencePanel } from "@/components/claims/EvidencePanel";
 import { VerificationWait } from "@/components/claims/VerificationWait";
+import { ConfidenceGauge } from "@/components/claims/ConfidenceGauge";
 
 const Globe = dynamic(() => import("@/components/globe/Globe"), { ssr: false });
 
+function CopyableHash({ hash }: { hash: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="mono-12 break-all text-secondary" title={hash}>
+        {hash}
+      </span>
+      <button
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(hash);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1600);
+          } catch {
+            /* clipboard unavailable — the hash is still selectable */
+          }
+        }}
+        className="mono-12 rounded-[var(--r-instrument)] border border-line px-2 py-1 text-secondary transition-colors hover:border-signal hover:text-signal"
+      >
+        {copied ? "copied" : "copy"}
+      </button>
+    </div>
+  );
+}
+
 function Timeline({ claim }: { claim: ClaimDetail }) {
-  const events: { label: string; at: string | null }[] = [
-    { label: "Submitted", at: claim.submitted_at },
-  ];
-  if (claim.verified_at) {
-    events.push({
+  const events: { label: string; at: string | null; done: boolean }[] = [
+    { label: "Submitted", at: claim.submitted_at, done: true },
+    {
       label: claim.status === "rejected" ? "Verification completed" : "Verified",
       at: claim.verified_at,
-    });
-  }
-  if (claim.status === "minted") events.push({ label: "Credits minted", at: null });
-  if (claim.status === "mint_failed") events.push({ label: "Minting failed", at: null });
+      done: claim.verified_at != null,
+    },
+    {
+      label:
+        claim.status === "mint_failed"
+          ? "Minting failed"
+          : claim.status === "minted"
+            ? "Credits minted"
+            : "Minting",
+      at: null,
+      done: claim.status === "minted" || claim.status === "mint_failed",
+    },
+  ];
 
   return (
-    <ol className="flex flex-col gap-2">
-      {events.map((e) => (
-        <li key={e.label} className="flex items-baseline justify-between gap-4">
-          <span className="text-sm text-airglow">{e.label}</span>
-          <span className="type-mono-s text-graticule">
-            {e.at ? formatDateTime(e.at) : "—"}
-          </span>
+    <ol className="flex flex-col">
+      {events.map((e, i) => (
+        <li key={e.label} className="flex gap-3">
+          <div className="flex flex-col items-center">
+            <span
+              aria-hidden
+              className="mt-1.5 inline-block h-2 w-2 rounded-full"
+              style={{ background: e.done ? "var(--signal)" : "var(--line)" }}
+            />
+            {i < events.length - 1 && (
+              <span aria-hidden className="w-px flex-1 bg-line" style={{ minHeight: 22 }} />
+            )}
+          </div>
+          <div className="pb-4">
+            <p className={`t-14 ${e.done ? "text-primary" : "text-muted"}`}>{e.label}</p>
+            {e.at && <p className="mono-12 mt-0.5 text-muted">{formatDateTime(e.at)}</p>}
+          </div>
         </li>
       ))}
     </ol>
@@ -60,6 +100,7 @@ function Timeline({ claim }: { claim: ClaimDetail }) {
 
 export default function ClaimDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const ready = useSessionGuard();
   const [claim, setClaim] = useState<ClaimDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
@@ -72,10 +113,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
       const data = await getClaim(id);
       setClaim(data);
       setError(null);
-      // Refresh the rail balance the moment a poll observes the mint.
-      if (wasNonTerminal.current && data.status === "minted") {
-        refreshBalance();
-      }
+      if (wasNonTerminal.current && data.status === "minted") refreshBalance();
       wasNonTerminal.current = !isTerminal(data.status);
     } catch (e) {
       setError(messageFrom(e, "The claim could not be loaded"));
@@ -83,14 +121,11 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   }, [id, refreshBalance]);
 
   useEffect(() => {
-    // Clear first: on a user switch the previous user's claim must not stay
-    // on screen underneath a "not found" error.
     setClaim(null);
     setError(null);
     load();
   }, [load, currentUserId]);
 
-  // Poll every 2s while non-terminal; stop on terminal; clean up on unmount.
   usePolling(load, claim != null && !isTerminal(claim.status));
 
   const doRetry = async () => {
@@ -105,6 +140,8 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  if (!ready) return null;
+
   if (error && !claim) {
     return (
       <div className="mx-auto max-w-3xl">
@@ -116,7 +153,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   if (!claim) {
     return (
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
-        <SkeletonBlock className="h-10 w-64" />
+        <SkeletonBlock className="h-12 w-64" />
         <SkeletonBlock className="h-40 w-full" />
         <SkeletonBlock className="h-64 w-full" />
       </div>
@@ -128,96 +165,127 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   const hasCoords = location?.lat != null && location?.lng != null;
   const isSatellite = claim.method === "satellite" && hasCoords;
   const radiusM = location?.radius_m ?? 0;
+  const category = claim.verification?.category;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="type-display-l">{actionLabel(claim.action_type)}</h1>
-          <p className="type-mono-s mt-1 text-graticule">
-            {claim.claim_id} · submitted {formatDate(claim.submitted_at)}
-          </p>
+    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+      <div>
+        <Link href="/claims" className="mono-12 text-secondary hover:text-signal">
+          ← Claims
+        </Link>
+      </div>
+
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden
+            className="mt-1.5 h-10 w-0.5 shrink-0"
+            style={{ background: category ? CATEGORY_COLOR[category] : "var(--line)" }}
+          />
+          <div>
+            <h1 className="t-40 text-primary">{actionLabel(claim.action_type)}</h1>
+            <p className="mono-12 mt-1.5 text-muted">
+              {claim.claim_id} · {claim.method} · submitted {formatDate(claim.submitted_at)}
+            </p>
+          </div>
         </div>
         <StatusBadge status={claim.status} />
       </header>
 
-      {/* Errors after the claim has loaded (a failed retry, a failed poll)
-          must stay visible, not be silently swallowed. */}
       {error && <ErrorPanel message={error} onRetry={load} />}
 
-      {/* The verification wait — the emotional core */}
       {verifying && <VerificationWait method={claim.method} />}
 
-      {/* Minting in progress */}
       {claim.status === "minting" && (
-        <div className="surface-shelf p-6" role="status">
-          <span className="type-label-xs mb-2 block">Issuing credits</span>
-          <p className="text-sm text-graticule">
-            Verification passed. The credits are being minted to your wallet.
+        <section className="panel p-6" role="status" aria-live="polite">
+          <span className="t-label">Issuing credits</span>
+          <p className="t-14 mt-2 text-secondary">
+            Verification passed. The credits are being written to the ledger.
           </p>
-        </div>
+        </section>
       )}
 
-      {/* Result */}
       {claim.status === "minted" && claim.verification && (
         <motion.section
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="surface-shelf p-6"
+          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          className="panel p-6 md:p-8"
           aria-label="Result"
         >
-          <span className="type-label-xs mb-3 block">Credits awarded</span>
-          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-            <span className="type-mono-l text-chlorophyll" style={{ fontSize: "2.5rem" }}>
-              +<AnimatedNumber value={claim.verification.credits ?? 0} decimals={1} durationMs={900} />
-            </span>
-            {claim.verification.category && (
-              <span className="flex items-center gap-1.5 text-sm text-airglow">
-                <CategoryDot category={claim.verification.category} />
-                {claim.verification.category}
-              </span>
-            )}
+          <div className="flex flex-wrap items-start justify-between gap-6">
+            <div>
+              <span className="t-label">Credits awarded</span>
+              <div className="mono-64 mt-2 text-signal">
+                <AnimatedNumber
+                  value={claim.verification.credits ?? 0}
+                  decimals={1}
+                  durationMs={900}
+                />
+              </div>
+              {category && (
+                <p className="mono-12 mt-2 flex items-center gap-2 text-secondary">
+                  <span
+                    aria-hidden
+                    className="inline-block h-2 w-2"
+                    style={{ background: CATEGORY_COLOR[category] }}
+                  />
+                  {category}
+                </p>
+              )}
+            </div>
             {claim.verification.confidence != null && (
-              <span className="type-mono-s text-graticule">
-                confidence {(claim.verification.confidence * 100).toFixed(0)}%
-              </span>
+              <ConfidenceGauge value={claim.verification.confidence} />
             )}
           </div>
           {claim.tx_hash && (
-            <p className="type-mono-s mt-3 text-graticule" title={claim.tx_hash}>
-              tx {shortHash(claim.tx_hash)}
-            </p>
+            <div className="mt-6 border-t border-line pt-4">
+              <span className="t-label">Ledger transaction</span>
+              <div className="mt-2">
+                <CopyableHash hash={claim.tx_hash} />
+              </div>
+            </div>
           )}
         </motion.section>
       )}
 
-      {/* Rejection — calm, clear, with a next step */}
       {claim.status === "rejected" && (
-        <section className="surface-shelf border-l-2 border-l-oxide p-6" aria-label="Outcome">
-          <span className="type-label-xs mb-2 block">Not verified</span>
-          <p className="text-sm text-airglow">
+        <section
+          className="panel p-6"
+          style={{ borderLeft: "2px solid var(--alert)" }}
+          aria-label="Outcome"
+        >
+          <span className="t-label">Not verified</span>
+          <p className="t-16 mt-2 text-primary">
             {claim.error ?? "The claim could not be verified."}
           </p>
-          <p className="mt-2 text-sm text-graticule">
-            If you have clearer evidence — a better document, a more precise location —
-            a new claim can use it.
+          <p className="t-14 mt-2 text-secondary">
+            Clearer evidence usually resolves it — a sharper scan, a wider radius, or a
+            longer period between the before and after dates.
           </p>
-          <Link href="/claims/new" className="mt-4 inline-block">
-            <Button variant="secondary">Make another claim</Button>
+          <Link href="/claims/new" className="mt-5 inline-block">
+            <Button variant="secondary">Log another action</Button>
           </Link>
         </section>
       )}
 
-      {/* Mint failed — verified, retryable */}
       {claim.status === "mint_failed" && (
-        <section className="surface-shelf border-l-2 border-l-sodium p-6" aria-label="Outcome">
-          <span className="type-label-xs mb-2 block">Verified — credits pending</span>
-          <p className="text-sm text-airglow">
-            The claim was verified{claim.verification?.credits ? ` for ${claim.verification.credits.toFixed(1)} credits` : ""},
-            but the credits could not be issued yet.
+        <section
+          className="panel p-6"
+          style={{ borderLeft: "2px solid var(--ember)" }}
+          aria-label="Outcome"
+        >
+          <span className="t-label">Verified — credits pending</span>
+          <p className="t-16 mt-2 text-primary">
+            This claim was verified
+            {claim.verification?.credits
+              ? ` for ${claim.verification.credits.toFixed(1)} credits`
+              : ""}
+            , but the ledger write did not complete. Verification does not need to run
+            again — only the mint.
           </p>
-          {claim.error && <p className="type-mono-s mt-2 text-graticule">{claim.error}</p>}
-          <div className="mt-4">
+          {claim.error && <p className="mono-12 mt-2 text-muted">{claim.error}</p>}
+          <div className="mt-5">
             <Button onClick={doRetry} disabled={retrying}>
               {retrying ? "Retrying…" : "Retry issuing credits"}
             </Button>
@@ -225,29 +293,31 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
         </section>
       )}
 
-      <div className="grid gap-6 md:grid-cols-[1.6fr_1fr]">
+      <div className="grid gap-6 md:grid-cols-[1.5fr_1fr]">
         <div className="flex min-w-0 flex-col gap-6">
-          {/* Evidence */}
-          {claim.verification && claim.verification.verified && (
-            <section className="surface-shelf p-6" aria-label="Evidence">
-              <span className="type-label-xs mb-4 block">Evidence</span>
-              <EvidencePanel evidence={claim.verification.evidence} />
+          {claim.verification?.verified && (
+            <section className="panel p-6" aria-label="Evidence">
+              <span className="t-label">Evidence</span>
+              <p className="mono-12 mt-1 text-muted">
+                Returned by the verification pipeline. Fields vary by method.
+              </p>
+              <div className="mt-5">
+                <EvidencePanel evidence={claim.verification.evidence} />
+              </div>
             </section>
           )}
 
-          {/* File claims */}
           {claim.file_name && (
-            <section className="surface-shelf p-6" aria-label="Submitted file">
-              <span className="type-label-xs mb-2 block">Submitted file</span>
-              <p className="type-mono-m text-airglow">{claim.file_name}</p>
+            <section className="panel p-6" aria-label="Submitted file">
+              <span className="t-label">Submitted file</span>
+              <p className="mono-14 mt-2 break-all text-primary">{claim.file_name}</p>
             </section>
           )}
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
-          {/* Location — the mini globe (7.5.2) */}
           {isSatellite && (
-            <section className="surface-shelf overflow-hidden p-0" aria-label="Location">
+            <section className="panel overflow-hidden" aria-label="Location">
               {!globeLost && (
                 <Globe
                   lat={location!.lat}
@@ -255,27 +325,29 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
                   radiusM={radiusM}
                   interactive={false}
                   onContextLost={() => setGlobeLost(true)}
-                  className="h-52 w-full"
+                  className="h-48 w-full"
                 />
               )}
-              <div className="px-5 pb-4 pt-1">
-                <p className="type-mono-s text-airglow">
+              <div className="p-5">
+                <span className="t-label">Parcel</span>
+                <p className="mono-14 mt-2 text-primary">
                   {formatLatLng(location!.lat!, location!.lng!)}
                 </p>
-                <p className="type-mono-s mt-0.5 text-graticule">
-                  radius {formatRadius(radiusM)}
-                  {claim.dates?.before && claim.dates?.after && (
-                    <> · {formatDate(claim.dates.before)} → {formatDate(claim.dates.after)}</>
-                  )}
-                </p>
+                <p className="mono-12 mt-1 text-muted">radius {formatRadius(radiusM)}</p>
+                {claim.dates?.before && claim.dates?.after && (
+                  <p className="mono-12 mt-1 text-muted">
+                    {formatDate(claim.dates.before)} → {formatDate(claim.dates.after)}
+                  </p>
+                )}
               </div>
             </section>
           )}
 
-          {/* Timeline */}
-          <section className="surface-shelf p-6" aria-label="Timeline">
-            <span className="type-label-xs mb-3 block">Timeline</span>
-            <Timeline claim={claim} />
+          <section className="panel p-6" aria-label="Timeline">
+            <span className="t-label">Timeline</span>
+            <div className="mt-4">
+              <Timeline claim={claim} />
+            </div>
           </section>
         </div>
       </div>

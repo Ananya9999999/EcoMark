@@ -23,7 +23,18 @@ CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 # Upload constraints (Part 5.1).
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
-ALLOWED_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".gpx", ".csv"}
+
+# Accepted extensions differ by method (spec §6): OCR reads documents,
+# GPS reads trip logs.
+ALLOWED_BY_METHOD = {
+    "ocr": {".jpg", ".jpeg", ".png", ".pdf"},
+    "gps": {".gpx", ".json", ".csv"},
+}
+ALLOWED_UPLOAD_EXTENSIONS = set().union(*ALLOWED_BY_METHOD.values())
+
+# Claim radius bounds in metres (spec §6).
+MIN_RADIUS_M = 50
+MAX_RADIUS_M = 5000
 
 # Balance cache window in seconds (Part 4.5).
 BALANCE_CACHE_SECONDS = 5
