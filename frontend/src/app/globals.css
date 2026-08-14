@@ -28,7 +28,9 @@
   /* ink */
   --text-primary: #e8f0ed;
   --text-secondary: #8fa39c;
-  --text-muted: #536761;
+  /* Lightened from #536761, which measured 2.77:1 on --bg-elevated and so
+     failed WCAG AA. #7b8d86 clears 4.5:1 on all three surfaces. */
+  --text-muted: #7b8d86;
 
   /* derived tints for badges and fills */
   --signal-wash: rgba(110, 231, 168, 0.12);
