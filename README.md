@@ -1,87 +1,104 @@
 # EcoMark
 
-Verifying real-world climate actions via satellite (NDVI) and OCR, then issuing tradeable credits on-chain. Built for SIH.
+Verifying real-world climate actions via satellite (NDVI) and OCR, then issuing tradeable credits on-chain.
 
----
+Built for Smart India Hackathon 2026.
 
-## This branch — Pair C: frontend + backend glue
+## What this is
 
-`Lisa-Part-C` holds the Next.js app, the FastAPI service, the database, and
-the orchestration that ties the other two pairs together.
+Most carbon credit systems are built for institutions — solar farms, forestry projects — and verified through slow, expensive third-party audits. EcoMark verifies individual and community-level climate actions instead, using the right verification method for each action type, and issues credits that can be **traded directly between people** (barter-style), not just sold on a marketplace.
 
-| Pair | Owns | Status on this branch |
+**Verification is two-tier, matched to what's actually observable:**
+
+| Action type | Example | Verification method |
 |---|---|---|
-| A — Verification | Satellite/NDVI, OCR pipelines | Mocked. Drops into `backend/app/integrations/verification.py` |
-| B — Blockchain | Solidity contracts, mint/transfer/swap | Mocked. Drops into `backend/app/integrations/chain.py` |
-| **C — Frontend + glue** | **Dashboard, API routes, database, full request flow** | **This branch** |
+| Land / community | Tree planting, pond restoration | Satellite imagery (Sentinel-2), NDVI change detection |
+| Energy / water | Reduced electricity or water use | OCR on utility bills + trend comparison |
+| Purchases | EV, solar panels, sustainable products | OCR on receipts + category matching |
+| Commute *(stretch goal)* | Biking / walking instead of driving | GPS trip logs, route-matching |
 
-Nothing here implements Pair A's or Pair B's work. Both are reached through
-two fixed interfaces, with mocks standing in until the real modules land.
+Verified actions mint credits on a Polygon-based ledger, which users can swap with each other across categories (e.g. energy credits for transport credits) — the ledger prevents double-counting and double-spending.
 
-## Setup
+## Tech stack
 
-Prerequisites: Node 18+, Python 3.10+. Windows / PowerShell.
+- **Frontend:** Next.js, TypeScript, Tailwind
+- **Backend:** FastAPI (Python)
+- **Verification:** Google Earth Engine API (satellite/NDVI), Tesseract OCR
+- **Blockchain:** Solidity (ERC-1155), Polygon Amoy testnet, web3.py
 
-### Backend
+## Project structure
 
-```powershell
-cd backend
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+```
+ecomark/
+├── frontend/           # Next.js dashboard — claims, balance, swap marketplace
+├── backend/
+│   ├── verification/   # Satellite + OCR pipelines, verification endpoints
+│   └── api/            # Routes tying verification + blockchain + frontend together
+├── contracts/          # Solidity smart contracts, deploy scripts
+├── .env.example
+├── CONTRIBUTING.md
+└── README.md
 ```
 
-If activation is blocked:
-`Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
+## Getting started
 
-The database is SQLite and creates itself at `backend\data\app.db` on
-first start, with four login profiles and no claims. Nothing to install
-or configure.
+### Prerequisites
+- Python 3.10+
+- Node.js 18+
+- A Google Earth Engine account registered for non-commercial use ([sign up](https://earthengine.google.com/))
+- Tesseract OCR installed locally (`sudo apt install tesseract-ocr` / `brew install tesseract`)
+- A funded wallet on Polygon Amoy testnet ([faucet](https://faucet.polygon.technology/))
 
-### Frontend
+### Setup
 
-```powershell
+```bash
+git clone <repo-url>
+cd ecomark
+cp .env.example .env   # fill in your own keys
+```
+
+**Verification service (Pair A)**
+```bash
+cd backend/verification
+pip install -r requirements.txt
+earthengine authenticate   # one-time browser login
+python satellite.py        # sanity check: should print NDVI data for a test location
+python ocr.py path/to/sample_bill.jpg   # sanity check: should print extracted text
+```
+
+**Contracts (Pair B)**
+```bash
+cd contracts
+npm install
+npx hardhat compile
+npx hardhat run scripts/deploy.js --network amoy
+```
+
+**Frontend + API (Pair C)**
+```bash
 cd frontend
 npm install
 npm run dev
+
+# in a separate terminal
+cd backend/api
+pip install -r requirements.txt
+uvicorn main:app --reload
 ```
 
-Open <http://localhost:3000>.
+## Team
 
-## Switching the mocks off
+6-person team, split into three pairs:
+- **Verification** — satellite + OCR pipelines
+- **Blockchain** — smart contracts, minting, swaps
+- **Frontend/Backend** — dashboard, claim flow, integration glue
 
-`backend/app/integrations/__init__.py` picks the implementation at import time:
+See `CONTRIBUTING.md` for branching and PR conventions.
 
-- `USE_MOCKS=true` (default) — mock verification (3 s delay) and an in-memory ledger
-- `USE_MOCKS=false` — the real modules from Pair A and Pair B
+## Status
 
-Everything imports `from app.integrations import verification, chain`, so when
-the real modules arrive you drop the files in and flip the flag. No other code
-changes. See `backend/.env.example`.
+🚧 Active hackathon build. See open issues/PRs for current progress.
 
-## Tests
+## License
 
-```powershell
-cd backend
-.venv\Scripts\Activate.ps1
-python -m pytest tests -q
-```
-
-49 tests cover the claim lifecycle, every validation message, the mocks, and
-the balance/trade endpoints.
-
-## Demo path
-
-1. Landing page — press **Enter**
-2. Choose a profile (no passwords; this is a demo device, not authentication)
-3. **Log action** → *Planted trees* → pick country → state → city → PIN code,
-   then click the globe for the exact parcel
-4. Set both dates, **Submit claim** — the verification sequence plays and
-   credits are minted
-5. **Trades** → propose a swap, switch profile, accept it, watch both balances move
-
-Sample data for a rehearsal: `python -m app.seed --demo`
-
-To guarantee no simulated ledger failures during a live demo, set
-`MOCK_CHAIN_FAILURES=false`.
+MIT
