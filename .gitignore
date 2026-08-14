@@ -1,15 +1,66 @@
-# python
-backend/.venv/
+# --- Environment / secrets ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# --- Python (backend/verification, backend/api) ---
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+*.egg-info/
 .pytest_cache/
-backend/data/
+.mypy_cache/
+uploads/
+*.db
+*.sqlite3
 
-# node
-frontend/node_modules/
-frontend/.next/
-frontend/next-env.d.ts
+# Earth Engine credentials cache
+.config/earthengine/
 
-# Next.js regenerates these on every `next dev` — keep them out of the repo
-frontend/AGENTS.md
-frontend/CLAUDE.md
+# --- Node / Next.js (frontend) ---
+node_modules/
+.next/
+out/
+build/
+dist/
+.turbo/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Solidity / Hardhat / Foundry (contracts) ---
+contracts/node_modules/
+contracts/artifacts/
+contracts/cache/
+contracts/typechain/
+contracts/typechain-types/
+contracts/coverage/
+contracts/coverage.json
+contracts/out/
+contracts/broadcast/
+
+# Wallet / private key files -- never commit these
+*.wallet
+mnemonic.txt
+private-key.txt
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# --- Misc ---
+*.log
+.cache/
