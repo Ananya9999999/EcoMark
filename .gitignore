@@ -1,0 +1,11 @@
+# python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/data/
+
+# node
+frontend/node_modules/
+frontend/.next/
+frontend/next-env.d.ts
