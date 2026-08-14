@@ -1,20 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
-import { listClaims } from "@/lib/api";
+import { listClaims, messageFrom } from "@/lib/api";
 import { useApp } from "@/lib/app-context";
-import { actionLabel, CATEGORIES, type ClaimSummary } from "@/lib/types";
+import { CATEGORIES, isTerminal, type ClaimSummary } from "@/lib/types";
+import { usePolling } from "@/lib/usePolling";
 import { Button } from "@/components/primitives/Button";
 import { CATEGORY_COLOR, CategoryDot } from "@/components/primitives/CategoryDot";
-import { EmptyState } from "@/components/primitives/EmptyState";
 import { ErrorPanel } from "@/components/primitives/ErrorPanel";
 import { SkeletonBlock, SkeletonRows } from "@/components/primitives/Skeleton";
-import { StatusBadge } from "@/components/primitives/StatusBadge";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
-import { formatDate } from "@/lib/format";
+import { ClaimRow } from "@/components/claims/ClaimRow";
 
 /** The ledger strip: four category readouts whose bar lengths are the chart. */
 function BalanceStrip() {
@@ -77,19 +76,29 @@ function BalanceStrip() {
 function RecentClaims() {
   const [claims, setClaims] = useState<ClaimSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { currentUserId } = useApp();
+  const { currentUserId, refreshBalance } = useApp();
+  const hadLive = useRef(false);
 
   const load = useCallback(() => {
-    setError(null);
     listClaims({ limit: 5 })
-      .then((list) => setClaims(list.claims))
-      .catch((e) => setError(e.message));
-  }, []);
+      .then((list) => {
+        setClaims(list.claims);
+        setError(null);
+        const hasLive = list.claims.some((c) => !isTerminal(c.status));
+        // A claim just reached a terminal state — the balance may have moved.
+        if (hadLive.current && !hasLive) refreshBalance();
+        hadLive.current = hasLive;
+      })
+      .catch((e) => setError(messageFrom(e, "Recent claims could not be loaded")));
+  }, [refreshBalance]);
 
   useEffect(() => {
     setClaims(null);
     load();
   }, [load, currentUserId]);
+
+  // Keep in-flight rows live, like the history page.
+  usePolling(load, claims?.some((c) => !isTerminal(c.status)) ?? false);
 
   return (
     <section aria-label="Recent claims" className="surface-shelf min-w-0 flex-[1.6] p-0">
@@ -117,40 +126,7 @@ function RecentClaims() {
       ) : (
         <ul className="flex flex-col divide-y divide-[var(--rule)]">
           {claims.map((claim, i) => (
-            <motion.li
-              key={claim.claim_id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.035, duration: 0.25 }}
-            >
-              <Link
-                href={`/claims/${claim.claim_id}`}
-                className="flex items-center justify-between gap-4 px-6 py-3.5 transition-colors hover:bg-[var(--graticule-dim)]"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-airglow">
-                    {actionLabel(claim.action_type)}
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-graticule">
-                    <span className="type-mono-s">{formatDate(claim.submitted_at)}</span>
-                    {claim.category && (
-                      <span className="flex items-center gap-1">
-                        <CategoryDot category={claim.category} />
-                        {claim.category}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  {claim.credits_awarded != null && (
-                    <span className="type-mono-m text-airglow">
-                      +{claim.credits_awarded.toFixed(1)}
-                    </span>
-                  )}
-                  <StatusBadge status={claim.status} />
-                </div>
-              </Link>
-            </motion.li>
+            <ClaimRow key={claim.claim_id} claim={claim} index={i} />
           ))}
         </ul>
       )}

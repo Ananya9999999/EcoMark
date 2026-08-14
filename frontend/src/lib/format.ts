@@ -1,10 +1,18 @@
 /** Formatting helpers — measured values get consistent treatment. */
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}/;
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+function parse(iso: string): Date {
+  // A date-only string must stay the calendar date the user picked:
+  // new Date("2026-08-14") is UTC midnight and shifts a day in UTC-negative
+  // timezones, so parse it as local time instead.
+  return new Date(DATE_ONLY.test(iso) ? `${iso}T00:00:00` : iso);
+}
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso || !ISO_DATE.test(iso)) return iso ?? "—";
-  const d = new Date(iso);
+  const d = parse(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, {
     day: "numeric",
@@ -15,7 +23,7 @@ export function formatDate(iso: string | null | undefined): string {
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso || !ISO_DATE.test(iso)) return iso ?? "—";
-  const d = new Date(iso);
+  const d = parse(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString(undefined, {
     day: "numeric",

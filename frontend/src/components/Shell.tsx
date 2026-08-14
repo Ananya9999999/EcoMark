@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 import { AppProvider, useApp } from "@/lib/app-context";
 import { CATEGORIES } from "@/lib/types";
 import { CategoryDot } from "./primitives/CategoryDot";
 import { AnimatedNumber } from "./primitives/AnimatedNumber";
+import { SkeletonBlock } from "./primitives/Skeleton";
 
 const NAV = [
   { href: "/", label: "Dashboard" },
@@ -62,9 +63,9 @@ function RailBalance() {
           Balance unavailable — retry
         </button>
       ) : balance == null ? (
-        <div className="flex flex-col gap-1.5" aria-hidden>
+        <div className="flex flex-col gap-1.5">
           {CATEGORIES.map((c) => (
-            <div key={c} className="skeleton h-4 w-full" />
+            <SkeletonBlock key={c} className="h-4 w-full" />
           ))}
         </div>
       ) : (
@@ -94,17 +95,20 @@ function RailBalance() {
 
 function UserSwitcher() {
   const { users, currentUserId, switchUser } = useApp();
+  // useId — the switcher is mounted twice (rail + mobile), so a fixed id
+  // would be a duplicate in the DOM and label activation would misfire.
+  const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor="user-switcher" className="type-label-xs">
+      <label htmlFor={id} className="type-label-xs">
         Viewing as
       </label>
       <select
-        id="user-switcher"
+        id={id}
         value={currentUserId ?? ""}
         onChange={(e) => switchUser(e.target.value)}
         disabled={users.length === 0}
-        className="w-full rounded-[var(--radius-instrument)] border border-[var(--rule-strong)] bg-shelf px-2 py-1.5 text-sm text-airglow disabled:opacity-50"
+        className="w-full input-instrument disabled:opacity-50"
       >
         {users.length === 0 ? (
           <option value="">No users</option>

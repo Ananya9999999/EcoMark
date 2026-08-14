@@ -8,16 +8,22 @@
  *
  * Performance: single sphere + small pin/ring geometries, no React state
  * changes per frame — the camera journey and ambient rotation run inside
- * useFrame with refs.
+ * useFrame with refs and pre-allocated scratch vectors. The non-interactive
+ * mini globe parks its camera at the pin and renders on demand only.
  */
 
-import { Canvas, useFrame, useLoader, type ThreeEvent } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 import { latLngToVector3, radiusCirclePoints, vector3ToLatLng } from "./coords";
+
+/** The --limb accent from docs/design.md. Three.js cannot read CSS custom
+ * properties, so the token is mirrored here — change both together. */
+const ACCENT = "#5cc8db";
+const ACCENT_RGB = new THREE.Color(ACCENT);
 
 export interface GlobeProps {
   lat: number | null;
@@ -26,6 +32,8 @@ export interface GlobeProps {
   interactive?: boolean;
   /** Fires when the user drops the pin by clicking the sphere. */
   onPick?: (lat: number, lng: number) => void;
+  /** Fires if the WebGL context is lost — parents swap in the fallback. */
+  onContextLost?: () => void;
   className?: string;
 }
 
@@ -37,12 +45,13 @@ const ATMOSPHERE_VERTEX = /* glsl */ `
   }
 `;
 
-// The limb glow: strongest at grazing angles, colour = --limb (#5cc8db).
+// The limb glow: strongest at grazing angles, colour = the accent uniform.
 const ATMOSPHERE_FRAGMENT = /* glsl */ `
+  uniform vec3 uColor;
   varying vec3 vNormal;
   void main() {
     float rim = pow(0.72 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.5);
-    gl_FragColor = vec4(0.36, 0.784, 0.859, 1.0) * rim;
+    gl_FragColor = vec4(uColor, 1.0) * rim;
   }
 `;
 
@@ -52,6 +61,7 @@ function Atmosphere() {
       new THREE.ShaderMaterial({
         vertexShader: ATMOSPHERE_VERTEX,
         fragmentShader: ATMOSPHERE_FRAGMENT,
+        uniforms: { uColor: { value: ACCENT_RGB } },
         blending: THREE.AdditiveBlending,
         side: THREE.BackSide,
         transparent: true,
@@ -79,11 +89,11 @@ function Pin({ lat, lng }: { lat: number; lng: number }) {
       {/* a thin spike + glowing head, in the limb accent */}
       <mesh position={[0, 0.03, 0]}>
         <cylinderGeometry args={[0.0035, 0.0035, 0.06, 8]} />
-        <meshBasicMaterial color="#5cc8db" />
+        <meshBasicMaterial color={ACCENT} />
       </mesh>
       <mesh position={[0, 0.065, 0]}>
         <sphereGeometry args={[0.012, 16, 16]} />
-        <meshBasicMaterial color="#5cc8db" />
+        <meshBasicMaterial color={ACCENT} />
       </mesh>
     </group>
   );
@@ -99,7 +109,7 @@ function RadiusRing({ lat, lng, radiusM }: { lat: number; lng: number; radiusM: 
     () =>
       new THREE.Line(
         geometry,
-        new THREE.LineBasicMaterial({ color: "#5cc8db", transparent: true, opacity: 0.9 }),
+        new THREE.LineBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.9 }),
       ),
     [geometry],
   );
@@ -110,18 +120,23 @@ function RadiusRing({ lat, lng, radiusM }: { lat: number; lng: number; radiusM: 
   return <primitive object={line} />;
 }
 
+// Scratch vectors for the per-frame camera journey — allocated once.
+const _current = new THREE.Vector3();
+const _goal = new THREE.Vector3();
+
 function EarthScene({
   lat,
   lng,
   radiusM,
   interactive = true,
   onPick,
-}: Omit<GlobeProps, "className">) {
+}: Omit<GlobeProps, "className" | "onContextLost">) {
   const texture = useLoader(THREE.TextureLoader, "/earth_day.jpg");
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
 
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  const { camera, invalidate } = useThree();
   const hasPin = lat != null && lng != null;
   // Camera journey state — refs, not React state, to keep frames cheap.
   const journey = useRef<{ target: THREE.Vector3; active: boolean }>({
@@ -131,14 +146,22 @@ function EarthScene({
   const interacted = useRef(false);
   const downAt = useRef<{ x: number; y: number } | null>(null);
 
-  // Travel to the pin whenever the coordinates change (dropped or typed).
+  // Move to the pin whenever the coordinates change (dropped or typed).
+  // The static mini globe parks instantly; the interactive globe travels.
   useEffect(() => {
     if (lat == null || lng == null) return;
+    if (!interactive) {
+      const distance = camera.position.length() || 2.2;
+      camera.position.copy(latLngToVector3(lat, lng, 1).multiplyScalar(distance));
+      camera.lookAt(0, 0, 0);
+      invalidate(); // demand mode — request the one frame this needs
+      return;
+    }
     journey.current.target.copy(latLngToVector3(lat, lng, 1));
     journey.current.active = true;
-  }, [lat, lng]);
+  }, [lat, lng, interactive, camera, invalidate]);
 
-  useFrame(({ camera }, delta) => {
+  useFrame((state, delta) => {
     const controls = controlsRef.current;
     // Ambient rotation at rest, until the user takes over or a pin exists.
     if (controls && interactive && !interacted.current && !hasPin) {
@@ -148,13 +171,14 @@ function EarthScene({
     }
     // Eased travel: swing the camera direction toward the pin.
     if (journey.current.active) {
-      const distance = camera.position.length();
-      const current = camera.position.clone().normalize();
-      const goal = journey.current.target.clone().normalize();
-      const next = current.lerp(goal, Math.min(1, delta * 4)).normalize();
-      camera.position.copy(next.multiplyScalar(distance));
-      camera.lookAt(0, 0, 0);
-      if (next.angleTo(goal) < 0.005) journey.current.active = false;
+      const cam = state.camera;
+      const distance = cam.position.length();
+      _current.copy(cam.position).normalize();
+      _goal.copy(journey.current.target).normalize();
+      _current.lerp(_goal, Math.min(1, delta * 4)).normalize();
+      cam.position.copy(_current).multiplyScalar(distance);
+      cam.lookAt(0, 0, 0);
+      if (_current.angleTo(_goal) < 0.005) journey.current.active = false;
     }
     controls?.update();
   });
@@ -185,29 +209,48 @@ function EarthScene({
       <Atmosphere />
       {hasPin && <Pin lat={lat!} lng={lng!} />}
       {hasPin && <RadiusRing lat={lat!} lng={lng!} radiusM={radiusM} />}
-      <OrbitControls
-        ref={controlsRef}
-        enablePan={false}
-        enableZoom={interactive}
-        enableRotate={interactive}
-        enableDamping
-        dampingFactor={0.08}
-        rotateSpeed={0.55}
-        autoRotateSpeed={0.4}
-        minDistance={1.6}
-        maxDistance={4.5}
-      />
+      {interactive && (
+        <OrbitControls
+          ref={controlsRef}
+          enablePan={false}
+          enableDamping
+          dampingFactor={0.08}
+          rotateSpeed={0.55}
+          autoRotateSpeed={0.4}
+          minDistance={1.6}
+          maxDistance={4.5}
+        />
+      )}
     </>
   );
 }
 
-export default function Globe({ className, ...props }: GlobeProps) {
+export default function Globe({ className, onContextLost, ...props }: GlobeProps) {
+  const interactive = props.interactive ?? true;
   return (
     <div className={className} aria-hidden>
       <Canvas
         camera={{ position: [0, 0.6, 2.6], fov: 45 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true }}
+        // The static mini globe renders only when something changes.
+        frameloop={interactive ? "always" : "demand"}
+        onCreated={({ gl }) => {
+          const canvas = gl.domElement;
+          canvas.addEventListener(
+            "webglcontextlost",
+            (e) => {
+              e.preventDefault();
+              // R3F calls forceContextLoss() during its own teardown, and
+              // React's dev double-mount triggers exactly that once. Only a
+              // loss on a canvas still in the document is a real failure.
+              setTimeout(() => {
+                if (canvas.isConnected) onContextLost?.();
+              }, 0);
+            },
+            { once: true },
+          );
+        }}
       >
         <EarthScene {...props} />
       </Canvas>

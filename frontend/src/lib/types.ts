@@ -24,6 +24,16 @@ export type ClaimStatus =
 
 export type SwapStatus = "pending" | "accepted" | "rejected" | "failed";
 
+export const CLAIM_STATUSES: ClaimStatus[] = [
+  "submitted",
+  "verifying",
+  "verified",
+  "rejected",
+  "minting",
+  "minted",
+  "mint_failed",
+];
+
 export const TERMINAL_STATUSES: ClaimStatus[] = ["rejected", "minted", "mint_failed"];
 
 export function isTerminal(status: ClaimStatus): boolean {

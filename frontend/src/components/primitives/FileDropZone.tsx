@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "./Button";
 
@@ -34,7 +34,6 @@ export function FileDropZone({
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const id = useId();
 
   useEffect(() => {
     if (file && IMAGE_EXT.has(extensionOf(file.name))) {
@@ -59,6 +58,22 @@ export function FileDropZone({
       onChange(candidate);
     },
     [onChange, onError],
+  );
+
+  // One hidden input serves both branches — browse, and replace.
+  const hiddenInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept={ACCEPT}
+      aria-label="Choose a file"
+      className="sr-only"
+      onChange={(e) => {
+        const f = e.target.files?.[0];
+        if (f) take(f);
+        e.target.value = "";
+      }}
+    />
   );
 
   if (file) {
@@ -95,17 +110,7 @@ export function FileDropZone({
             Remove
           </Button>
         </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPT}
-          className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) take(f);
-            e.target.value = "";
-          }}
-        />
+        {hiddenInput}
       </div>
     );
   }
@@ -129,27 +134,10 @@ export function FileDropZone({
     >
       <p className="text-sm text-airglow">Drop the file here</p>
       <p className="text-xs text-graticule">JPG, PNG, PDF, GPX or CSV — up to 10 MB</p>
-      <label htmlFor={id}>
-        <Button
-          variant="secondary"
-          type="button"
-          onClick={() => inputRef.current?.click()}
-        >
-          Browse files
-        </Button>
-      </label>
-      <input
-        id={id}
-        ref={inputRef}
-        type="file"
-        accept={ACCEPT}
-        className="sr-only"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) take(f);
-          e.target.value = "";
-        }}
-      />
+      <Button variant="secondary" type="button" onClick={() => inputRef.current?.click()}>
+        Browse files
+      </Button>
+      {hiddenInput}
     </div>
   );
 }

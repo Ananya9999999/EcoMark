@@ -28,7 +28,6 @@ import { formatDateTime } from "@/lib/format";
 import { Button } from "@/components/primitives/Button";
 import { CategoryDot } from "@/components/primitives/CategoryDot";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
-import { EmptyState } from "@/components/primitives/EmptyState";
 import { ErrorPanel } from "@/components/primitives/ErrorPanel";
 import { SkeletonRows } from "@/components/primitives/Skeleton";
 import { SwapStatusBadge } from "@/components/primitives/StatusBadge";
@@ -43,7 +42,7 @@ function categorySelect(
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value as CreditCategory)}
-      className="rounded-[var(--radius-instrument)] border border-[var(--rule-strong)] bg-shelf px-2 py-1.5 text-sm text-airglow"
+      className="input-instrument"
     >
       {CATEGORIES.map((c) => (
         <option key={c} value={c}>
@@ -143,7 +142,7 @@ function ProposePanel({ onCreated }: { onCreated: () => void }) {
               id="swap-counterparty"
               value={counterparty}
               onChange={(e) => setCounterparty(e.target.value)}
-              className="w-full max-w-xs rounded-[var(--radius-instrument)] border border-[var(--rule-strong)] bg-shelf px-2 py-1.5 text-sm text-airglow"
+              className="input-instrument w-full max-w-xs"
             >
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
@@ -168,7 +167,7 @@ function ProposePanel({ onCreated }: { onCreated: () => void }) {
                   value={offerAmount}
                   onChange={(e) => setOfferAmount(e.target.value)}
                   placeholder="0.0"
-                  className="type-mono-m w-24 rounded-[var(--radius-instrument)] border border-[var(--rule-strong)] bg-shelf px-2.5 py-1.5 text-airglow"
+                  className="type-mono-m input-instrument w-24"
                 />
               </div>
               {available != null && (
@@ -191,7 +190,7 @@ function ProposePanel({ onCreated }: { onCreated: () => void }) {
                   value={wantAmount}
                   onChange={(e) => setWantAmount(e.target.value)}
                   placeholder="0.0"
-                  className="type-mono-m w-24 rounded-[var(--radius-instrument)] border border-[var(--rule-strong)] bg-shelf px-2.5 py-1.5 text-airglow"
+                  className="type-mono-m input-instrument w-24"
                 />
               </div>
             </div>

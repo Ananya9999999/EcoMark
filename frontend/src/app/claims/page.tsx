@@ -6,35 +6,22 @@
  */
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, listClaims } from "@/lib/api";
+import { listClaims, messageFrom } from "@/lib/api";
 import { useApp } from "@/lib/app-context";
 import {
-  actionLabel,
   CATEGORIES,
+  CLAIM_STATUSES,
   isTerminal,
-  type ClaimStatus,
   type ClaimSummary,
 } from "@/lib/types";
-import { formatDate } from "@/lib/format";
+import { usePolling } from "@/lib/usePolling";
 import { Button } from "@/components/primitives/Button";
-import { CategoryDot } from "@/components/primitives/CategoryDot";
 import { EmptyState } from "@/components/primitives/EmptyState";
 import { ErrorPanel } from "@/components/primitives/ErrorPanel";
 import { SkeletonRows } from "@/components/primitives/Skeleton";
-import { StatusBadge } from "@/components/primitives/StatusBadge";
-
-const STATUSES: ClaimStatus[] = [
-  "submitted",
-  "verifying",
-  "verified",
-  "rejected",
-  "minting",
-  "minted",
-  "mint_failed",
-];
+import { ClaimRow } from "@/components/claims/ClaimRow";
 
 export default function ClaimsPage() {
   const [claims, setClaims] = useState<ClaimSummary[] | null>(null);
@@ -43,17 +30,24 @@ export default function ClaimsPage() {
   const [category, setCategory] = useState("");
   const { currentUserId } = useApp();
 
+  // Monotonic token: a slow response for an old filter/user can never
+  // overwrite the list for the current one.
+  const seq = useRef(0);
+
   const load = useCallback(async () => {
+    const mySeq = ++seq.current;
     try {
       const list = await listClaims({
         status: status || undefined,
         category: category || undefined,
         limit: 100,
       });
+      if (mySeq !== seq.current) return; // stale — drop it
       setClaims(list.claims);
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Claims could not be loaded");
+      if (mySeq !== seq.current) return;
+      setError(messageFrom(e, "Claims could not be loaded"));
     }
   }, [status, category]);
 
@@ -63,11 +57,7 @@ export default function ClaimsPage() {
   }, [load, currentUserId]);
 
   // Live rows: while any listed claim is non-terminal, poll every 2s.
-  useEffect(() => {
-    if (!claims || !claims.some((c) => !isTerminal(c.status))) return;
-    const interval = window.setInterval(load, 2000);
-    return () => window.clearInterval(interval);
-  }, [claims, load]);
+  usePolling(load, claims?.some((c) => !isTerminal(c.status)) ?? false);
 
   const select = (
     label: string,
@@ -84,7 +74,7 @@ export default function ClaimsPage() {
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-[var(--radius-instrument)] border border-[var(--rule-strong)] bg-shelf px-2 py-1 text-sm text-airglow"
+        className="input-instrument"
       >
         <option value="">all</option>
         {options.map((o) => (
@@ -106,7 +96,7 @@ export default function ClaimsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-4">
-          {select("Status", "filter-status", status, setStatus, STATUSES)}
+          {select("Status", "filter-status", status, setStatus, CLAIM_STATUSES)}
           {select("Category", "filter-category", category, setCategory, CATEGORIES)}
         </div>
       </header>
@@ -148,40 +138,7 @@ export default function ClaimsPage() {
       ) : (
         <ul className="surface-shelf flex flex-col divide-y divide-[var(--rule)] p-0">
           {claims.map((claim, i) => (
-            <motion.li
-              key={claim.claim_id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(i, 10) * 0.035, duration: 0.25 }}
-            >
-              <Link
-                href={`/claims/${claim.claim_id}`}
-                className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-[var(--graticule-dim)]"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-airglow">
-                    {actionLabel(claim.action_type)}
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-graticule">
-                    <span className="type-mono-s">{formatDate(claim.submitted_at)}</span>
-                    {claim.category && (
-                      <span className="flex items-center gap-1">
-                        <CategoryDot category={claim.category} />
-                        {claim.category}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  {claim.credits_awarded != null && claim.status === "minted" && (
-                    <span className="type-mono-m text-airglow">
-                      +{claim.credits_awarded.toFixed(1)}
-                    </span>
-                  )}
-                  <StatusBadge status={claim.status} />
-                </div>
-              </Link>
-            </motion.li>
+            <ClaimRow key={claim.claim_id} claim={claim} index={i} />
           ))}
         </ul>
       )}

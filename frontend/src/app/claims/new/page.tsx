@@ -156,7 +156,7 @@ export default function NewClaimPage() {
                     type="date"
                     value={beforeDate}
                     onChange={(e) => setBeforeDate(e.target.value)}
-                    className="type-mono-m rounded-[var(--radius-instrument)] border border-[var(--rule-strong)] bg-shelf px-2.5 py-1.5 text-airglow [color-scheme:dark]"
+                    className="type-mono-m input-instrument [color-scheme:dark]"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -168,7 +168,7 @@ export default function NewClaimPage() {
                     type="date"
                     value={afterDate}
                     onChange={(e) => setAfterDate(e.target.value)}
-                    className="type-mono-m rounded-[var(--radius-instrument)] border border-[var(--rule-strong)] bg-shelf px-2.5 py-1.5 text-airglow [color-scheme:dark]"
+                    className="type-mono-m input-instrument [color-scheme:dark]"
                   />
                 </div>
               </div>

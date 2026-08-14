@@ -10,10 +10,11 @@
  */
 
 import dynamic from "next/dynamic";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
-import { formatRadius } from "@/lib/format";
-import { searchPlaces, type Place } from "./gazetteer";
+import { formatLatLng, formatRadius } from "@/lib/format";
+import { prefersReducedMotion } from "@/lib/motion";
+import { searchPlaces } from "./gazetteer";
 
 const Globe = dynamic(() => import("./Globe"), { ssr: false });
 
@@ -41,7 +42,7 @@ export function CoordinateInput({
 }) {
   const [showGlobe, setShowGlobe] = useState<boolean | null>(null);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Place[]>([]);
+  const [dismissed, setDismissed] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const latId = useId();
   const lngId = useId();
@@ -49,31 +50,32 @@ export function CoordinateInput({
   const searchId = useId();
 
   useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    setShowGlobe(!reduced && webglAvailable());
+    setShowGlobe(!prefersReducedMotion() && webglAvailable());
   }, []);
 
-  useEffect(() => {
-    setResults(searchPlaces(query));
-  }, [query]);
+  // If the GPU context dies after mount, fall back to the numeric inputs
+  // rather than leaving a dead canvas.
+  const handleContextLost = useCallback(() => setShowGlobe(false), []);
+
+  // Derived, not stored: the dropdown is a pure function of the query.
+  const results = useMemo(
+    () => (dismissed ? [] : searchPlaces(query)),
+    [query, dismissed],
+  );
 
   // Close search results on outside click.
   useEffect(() => {
     const close = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setResults([]);
+        setDismissed(true);
       }
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
-  const readout = useMemo(() => {
-    if (value.lat == null || value.lng == null) return null;
-    const ns = value.lat >= 0 ? "N" : "S";
-    const ew = value.lng >= 0 ? "E" : "W";
-    return `${Math.abs(value.lat).toFixed(4)}° ${ns}   ${Math.abs(value.lng).toFixed(4)}° ${ew}`;
-  }, [value.lat, value.lng]);
+  const readout =
+    value.lat == null || value.lng == null ? null : formatLatLng(value.lat, value.lng);
 
   const pick = (lat: number, lng: number) => onChange({ ...value, lat, lng });
 
@@ -100,7 +102,7 @@ export function CoordinateInput({
           const raw = e.target.value;
           onChange({ ...value, [field]: raw === "" ? null : Number(raw) });
         }}
-        className="type-mono-m w-full rounded-[var(--radius-instrument)] border border-[var(--rule-strong)] bg-shelf px-2.5 py-1.5 text-airglow"
+        className="type-mono-m input-instrument w-full"
       />
     </div>
   );
@@ -117,7 +119,10 @@ export function CoordinateInput({
               id={searchId}
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setDismissed(false);
+              }}
               placeholder="Jump to a place…"
               autoComplete="off"
               className="w-full rounded-[var(--radius-row)] border border-[var(--rule-strong)] bg-night-ocean/85 px-3 py-1.5 text-sm text-airglow backdrop-blur placeholder:text-graticule"
@@ -135,7 +140,6 @@ export function CoordinateInput({
                       onClick={() => {
                         pick(p.lat, p.lng);
                         setQuery("");
-                        setResults([]);
                       }}
                       className="w-full px-3 py-1.5 text-left text-sm text-airglow hover:bg-[var(--limb-dim)]"
                     >
@@ -152,6 +156,7 @@ export function CoordinateInput({
             radiusM={value.radius_m}
             interactive
             onPick={pick}
+            onContextLost={handleContextLost}
             className="h-80 w-full overflow-hidden rounded-[var(--radius-panel)] border border-[var(--rule)] bg-night-ocean md:h-96"
           />
           <div className="pointer-events-none absolute bottom-3 left-3 rounded-[var(--radius-instrument)] bg-night-ocean/85 px-2.5 py-1 backdrop-blur">

@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 
 import type { VerificationMethod } from "@/lib/types";
 
@@ -22,21 +22,23 @@ const STAGE_AT = [0, 1.1, 2.2, 3.1];
 
 export function VerificationWait({ method }: { method: VerificationMethod }) {
   const stages = STAGES[method];
-  const [elapsed, setElapsed] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     const started = performance.now();
-    const interval = window.setInterval(
-      () => setElapsed((performance.now() - started) / 1000),
-      250,
-    );
+    const lastIndex = stages.length - 1;
+    const interval = window.setInterval(() => {
+      const elapsed = (performance.now() - started) / 1000;
+      let index = 0;
+      for (let i = 0; i <= lastIndex; i++) {
+        if (elapsed >= STAGE_AT[i]) index = i;
+      }
+      // Only render on an actual stage change; stop once the last is active.
+      setActiveIndex((prev) => (prev === index ? prev : index));
+      if (index === lastIndex) window.clearInterval(interval);
+    }, 250);
     return () => window.clearInterval(interval);
-  }, []);
-
-  let activeIndex = 0;
-  for (let i = 0; i < stages.length; i++) {
-    if (elapsed >= STAGE_AT[i]) activeIndex = i;
-  }
+  }, [stages.length]);
 
   return (
     <div className="surface-shelf p-6" role="status" aria-live="polite">
@@ -45,8 +47,8 @@ export function VerificationWait({ method }: { method: VerificationMethod }) {
         {stages.map((stage, i) => {
           const state = i < activeIndex ? "done" : i === activeIndex ? "active" : "ahead";
           return (
-            <AnimatePresence key={stage} mode="popLayout">
               <motion.li
+                key={stage}
                 initial={{ opacity: 0, x: -6 }}
                 animate={{
                   opacity: state === "ahead" ? 0.35 : 1,
@@ -85,7 +87,6 @@ export function VerificationWait({ method }: { method: VerificationMethod }) {
                   {stage}
                 </span>
               </motion.li>
-            </AnimatePresence>
           );
         })}
       </ol>

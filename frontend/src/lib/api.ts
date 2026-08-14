@@ -10,7 +10,7 @@ import type {
   UserList,
 } from "./types";
 
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const USER_KEY = "carbon-credit:user-id";
 
 /** Error carrying the backend's human-readable detail message. */
@@ -21,6 +21,11 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
   }
+}
+
+/** The backend's message when we have one; a calm fallback when we don't. */
+export function messageFrom(error: unknown, fallback: string): string {
+  return error instanceof ApiError ? error.message : fallback;
 }
 
 export function getStoredUserId(): string | null {

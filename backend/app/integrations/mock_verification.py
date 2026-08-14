@@ -23,11 +23,11 @@ _CATEGORY_BY_ACTION = {
     "commute": "transport",
 }
 
-_REJECTION_REASONS = [
-    "No detectable vegetation change in the specified area",
-    "The document could not be matched to a utility account",
-    "The trip log does not show a consistent low-carbon route",
-]
+_REJECTION_REASONS = {
+    "satellite": "No detectable vegetation change in the specified area",
+    "ocr": "The document could not be matched to a utility account",
+    "gps": "The trip log does not show a consistent low-carbon route",
+}
 
 
 def verify_claim(claim: dict) -> dict:
@@ -44,7 +44,7 @@ def verify_claim(claim: dict) -> dict:
             "credits": 0.0,
             "category": None,
             "evidence": {},
-            "error": random.choice(_REJECTION_REASONS),
+            "error": _REJECTION_REASONS.get(method, _REJECTION_REASONS["ocr"]),
         }
 
     confidence = round(random.uniform(0.75, 0.95), 2)

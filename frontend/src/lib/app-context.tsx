@@ -12,6 +12,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -37,11 +38,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [balance, setBalance] = useState<Balance | null>(null);
   const [balanceError, setBalanceError] = useState(false);
 
+  // Monotonic token so a slow response for the previous user can never
+  // overwrite the balance shown for the current one.
+  const balanceSeq = useRef(0);
+
   const refreshBalance = useCallback(async () => {
+    const seq = ++balanceSeq.current;
     try {
-      setBalance(await getBalance());
+      const next = await getBalance();
+      if (seq !== balanceSeq.current) return; // stale response — drop it
+      setBalance(next);
       setBalanceError(false);
     } catch {
+      if (seq !== balanceSeq.current) return;
       setBalanceError(true);
     }
   }, []);
@@ -72,6 +81,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       setStoredUserId(id);
       setCurrentUserId(id);
+      balanceSeq.current++; // invalidate any in-flight fetch for the old user
       setBalance(null);
       refreshBalance();
     },

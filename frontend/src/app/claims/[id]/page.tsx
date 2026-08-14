@@ -11,8 +11,9 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
-import { ApiError, getClaim, retryMint } from "@/lib/api";
+import { getClaim, messageFrom, retryMint } from "@/lib/api";
 import { useApp } from "@/lib/app-context";
+import { usePolling } from "@/lib/usePolling";
 import {
   actionLabel,
   isTerminal,
@@ -62,7 +63,8 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   const [claim, setClaim] = useState<ClaimDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
-  const { refreshBalance } = useApp();
+  const [globeLost, setGlobeLost] = useState(false);
+  const { refreshBalance, currentUserId } = useApp();
   const wasNonTerminal = useRef(false);
 
   const load = useCallback(async () => {
@@ -76,20 +78,16 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
       }
       wasNonTerminal.current = !isTerminal(data.status);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "The claim could not be loaded");
+      setError(messageFrom(e, "The claim could not be loaded"));
     }
   }, [id, refreshBalance]);
 
-  // Poll every 2s while non-terminal; stop on terminal; clean up on unmount.
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, currentUserId]);
 
-  useEffect(() => {
-    if (!claim || isTerminal(claim.status)) return;
-    const interval = window.setInterval(load, 2000);
-    return () => window.clearInterval(interval);
-  }, [claim, load]);
+  // Poll every 2s while non-terminal; stop on terminal; clean up on unmount.
+  usePolling(load, claim != null && !isTerminal(claim.status));
 
   const doRetry = async () => {
     setRetrying(true);
@@ -97,7 +95,7 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
       await retryMint(id);
       await load();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "The retry could not be started");
+      setError(messageFrom(e, "The retry could not be started"));
     } finally {
       setRetrying(false);
     }
@@ -122,7 +120,10 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const verifying = claim.status === "submitted" || claim.status === "verifying";
-  const isSatellite = claim.method === "satellite" && claim.location?.lat != null;
+  const location = claim.location;
+  const hasCoords = location?.lat != null && location?.lng != null;
+  const isSatellite = claim.method === "satellite" && hasCoords;
+  const radiusM = location?.radius_m ?? 0;
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
@@ -135,6 +136,10 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
         </div>
         <StatusBadge status={claim.status} />
       </header>
+
+      {/* Errors after the claim has loaded (a failed retry, a failed poll)
+          must stay visible, not be silently swallowed. */}
+      {error && <ErrorPanel message={error} onRetry={load} />}
 
       {/* The verification wait — the emotional core */}
       {verifying && <VerificationWait method={claim.method} />}
@@ -239,19 +244,22 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
           {/* Location — the mini globe (7.5.2) */}
           {isSatellite && (
             <section className="surface-shelf overflow-hidden p-0" aria-label="Location">
-              <Globe
-                lat={claim.location!.lat}
-                lng={claim.location!.lng}
-                radiusM={claim.location!.radius_m ?? 500}
-                interactive={false}
-                className="h-52 w-full"
-              />
+              {!globeLost && (
+                <Globe
+                  lat={location!.lat}
+                  lng={location!.lng}
+                  radiusM={radiusM}
+                  interactive={false}
+                  onContextLost={() => setGlobeLost(true)}
+                  className="h-52 w-full"
+                />
+              )}
               <div className="px-5 pb-4 pt-1">
                 <p className="type-mono-s text-airglow">
-                  {formatLatLng(claim.location!.lat!, claim.location!.lng!)}
+                  {formatLatLng(location!.lat!, location!.lng!)}
                 </p>
                 <p className="type-mono-s mt-0.5 text-graticule">
-                  radius {formatRadius(claim.location!.radius_m ?? 0)}
+                  radius {formatRadius(radiusM)}
                   {claim.dates?.before && claim.dates?.after && (
                     <> · {formatDate(claim.dates.before)} → {formatDate(claim.dates.after)}</>
                   )}
