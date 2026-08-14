@@ -1,0 +1,278 @@
+@import "tailwindcss";
+
+/*
+ * EcoMark — every value is defined in this file.
+ * Direction: atmospheric instrumentation. Dark green-cast ground, one
+ * luminous signal, four bound category hues. No blue in the chrome.
+ */
+
+:root {
+  /* ground and surfaces  */
+  --bg-void: #070b0a;
+  --bg-surface: #0f1614;
+  --bg-elevated: #16201d;
+  --line: #22302c;
+
+  /* signal */
+  --signal: #6ee7a8;
+  --signal-dim: #2f6b50;
+  --ember: #f0a868;
+  --alert: #e8705c;
+
+  /* categories — identical everywhere this category appears */
+  --land: #6ee7a8;
+  --energy: #f0a868;
+  --water: #5ec8e8;
+  --transport: #a98bf0;
+
+  /* ink */
+  --text-primary: #e8f0ed;
+  --text-secondary: #8fa39c;
+  /* Lightened from #536761, which measured 2.77:1 on --bg-elevated and so
+     failed WCAG AA. #7b8d86 clears 4.5:1 on all three surfaces. */
+  --text-muted: #7b8d86;
+
+  /* derived tints for badges and fills */
+  --signal-wash: rgba(110, 231, 168, 0.12);
+  --ember-wash: rgba(240, 168, 104, 0.12);
+  --alert-wash: rgba(232, 112, 92, 0.14);
+  --muted-wash: rgba(143, 163, 156, 0.1);
+  --land-wash: rgba(110, 231, 168, 0.12);
+  --energy-wash: rgba(240, 168, 104, 0.12);
+  --water-wash: rgba(94, 200, 232, 0.12);
+  --transport-wash: rgba(169, 139, 240, 0.12);
+
+  /* elevation: surface step + inset top highlight + wide ambient occlusion */
+  --edge: inset 0 1px 0 rgba(232, 240, 237, 0.06);
+  --edge-strong: inset 0 1px 0 rgba(232, 240, 237, 0.1);
+  --occlusion: 0 16px 48px -16px rgba(0, 0, 0, 0.7);
+  --contact: 0 2px 8px -3px rgba(0, 0, 0, 0.6);
+
+  /* radii track object scale */
+  --r-instrument: 2px;
+  --r-row: 6px;
+  --r-panel: 14px;
+
+  /* motion tokens  */
+  --d-instant: 80ms;
+  --d-quick: 160ms;
+  --d-base: 280ms;
+  --d-slow: 520ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@theme inline {
+  --color-void: var(--bg-void);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+  --color-line: var(--line);
+  --color-signal: var(--signal);
+  --color-signal-dim: var(--signal-dim);
+  --color-ember: var(--ember);
+  --color-alert: var(--alert);
+  --color-land: var(--land);
+  --color-energy: var(--energy);
+  --color-water: var(--water);
+  --color-transport: var(--transport);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+
+  --font-display: var(--font-bricolage);
+  --font-sans: var(--font-inter-tight);
+  --font-mono: var(--font-jetbrains);
+
+  --radius-instrument: 2px;
+  --radius-row: 6px;
+  --radius-panel: 14px;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-inter-tight), system-ui, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ----- type scale: 12 / 14 / 16 / 20 / 28 / 40 / 64 only ----- */
+
+.t-64 {
+  font-family: var(--font-bricolage), sans-serif;
+  font-size: 64px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.t-40 {
+  font-family: var(--font-bricolage), sans-serif;
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.t-28 {
+  font-family: var(--font-bricolage), sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+.t-20 {
+  font-family: var(--font-bricolage), sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.t-16 {
+  font-size: 16px;
+  line-height: 1.55;
+}
+.t-14 {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.t-12 {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* uppercase eyebrow — one size only, cartographic legend treatment */
+.t-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* ----- data: every number is mono with tabular figures ----- */
+
+.mono,
+.mono-64,
+.mono-40,
+.mono-28,
+.mono-20,
+.mono-16,
+.mono-14,
+.mono-12 {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+.mono-64 { font-size: 64px; letter-spacing: -0.03em; line-height: 1; }
+.mono-40 { font-size: 40px; letter-spacing: -0.025em; line-height: 1.05; }
+.mono-28 { font-size: 28px; letter-spacing: -0.02em; line-height: 1.15; }
+.mono-20 { font-size: 20px; letter-spacing: -0.01em; }
+.mono-16 { font-size: 16px; }
+.mono-14 { font-size: 14px; }
+.mono-12 { font-size: 12px; letter-spacing: 0.02em; }
+
+/* ----- elevation strata ----- */
+
+.panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  box-shadow: var(--edge), var(--occlusion);
+}
+
+.panel-elevated {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--r-row);
+  box-shadow: var(--edge-strong), var(--contact);
+}
+
+/* ----- form controls: instrument chrome, size set by the call site ----- */
+
+.field {
+  border-radius: var(--r-instrument);
+  border: 1px solid var(--line);
+  background: var(--bg-void);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  transition: border-color var(--d-quick) var(--ease-out);
+}
+.field:hover:not(:disabled) {
+  border-color: var(--signal-dim);
+}
+.field:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.field[aria-invalid="true"] {
+  border-color: var(--alert);
+}
+
+/* ----- focus: always visible, never removed without a replacement ----- */
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-radius: var(--r-instrument);
+}
+
+::selection {
+  background: rgba(110, 231, 168, 0.28);
+  color: var(--text-primary);
+}
+
+/* ----- skeletons: match the shape of the content, never a spinner ----- */
+
+.skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--bg-surface) 40%,
+    var(--bg-elevated) 50%,
+    var(--bg-surface) 60%
+  );
+  background-size: 200% 100%;
+  animation: sweep 1.4s ease infinite;
+  border-radius: var(--r-row);
+}
+
+@keyframes sweep {
+  from { background-position: 120% 0; }
+  to { background-position: -80% 0; }
+}
+
+/* single attention shake for errors  */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+.shake {
+  animation: shake 120ms var(--ease-in-out);
+}
+
+/* hairline tick scale used under the balance instrument */
+.ticks {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--line) 0 1px,
+    transparent 1px 100%
+  );
+  background-size: 8.3333% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
