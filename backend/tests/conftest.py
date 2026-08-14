@@ -96,6 +96,12 @@ def client(engine, no_sleep, fresh_chain):
     app.dependency_overrides[get_session] = _get_session
     invalidate_balance_cache()
     with TestClient(app) as c:
+        # Startup seeds profiles only. Balance and swap behaviour needs
+        # holdings to exist, so mint the demo balances onto the mock chain.
+        from app.seed import sync_mock_chain
+
+        sync_mock_chain()
+        invalidate_balance_cache()
         yield c
     app.dependency_overrides.clear()
     invalidate_balance_cache()

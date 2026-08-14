@@ -33,7 +33,9 @@ def _seed_if_needed() -> None:
     with Session(engine) as session:
         has_users = session.exec(select(User)).first() is not None
     if not has_users:
-        seed()
+        # Profiles only — the login screen needs them. Sample claims and
+        # balances are opt-in: python -m app.seed --demo
+        seed(demo=False)
     elif use_mocks():
         sync_mock_chain()
 

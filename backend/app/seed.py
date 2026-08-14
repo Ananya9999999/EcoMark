@@ -106,7 +106,14 @@ SWAPS = [
 ]
 
 
-def seed() -> None:
+def seed(demo: bool = False) -> None:
+    """Create the four demo profiles.
+
+    With demo=True it also inserts sample claims, swaps and balances. Those
+    are illustrative only — delete them (or just re-create app.db) once real
+    data exists. Without the flag the database starts empty apart from the
+    profiles, which the login screen needs.
+    """
     create_db_and_tables()
     with Session(engine) as session:
         for i, u in enumerate(USERS):
@@ -115,6 +122,12 @@ def seed() -> None:
                 # is deterministically Priya.
                 session.add(User(**u, created_at=_ts(30 - i)))
         session.commit()
+
+        if not demo:
+            session.commit()
+            print(f"Seeded {len(USERS)} profiles. No sample claims "
+                  "(use --demo for illustrative data).")
+            return
 
         for user_id, claim_id, action, method, status, days_ago, extra in CLAIMS:
             if session.get(Claim, claim_id) is not None:
@@ -169,7 +182,7 @@ def seed() -> None:
         session.commit()
 
     sync_mock_chain()
-    print("Seeded: 4 users, 12 claims, 2 pending swaps, mock balances.")
+    print("Seeded: 4 profiles, 12 sample claims, 2 pending trades, mock balances.")
 
 
 def sync_mock_chain() -> None:
@@ -237,4 +250,6 @@ def sync_mock_chain() -> None:
 
 
 if __name__ == "__main__":
-    seed()
+    import sys
+
+    seed(demo="--demo" in sys.argv)
