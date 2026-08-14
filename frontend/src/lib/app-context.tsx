@@ -17,7 +17,13 @@ import {
   type ReactNode,
 } from "react";
 
-import { getBalance, getStoredUserId, listAllUsers, setStoredUserId } from "./api";
+import {
+  clearStoredUserId,
+  getBalance,
+  getStoredUserId,
+  listAllUsers,
+  setStoredUserId,
+} from "./api";
 import type { Balance, UserInfo } from "./types";
 
 interface AppState {
@@ -25,6 +31,7 @@ interface AppState {
   currentUserId: string | null;
   currentUser: UserInfo | null;
   switchUser: (id: string) => void;
+  logOut: () => void;
   balance: Balance | null;
   balanceError: boolean;
   refreshBalance: () => Promise<void>;
@@ -62,16 +69,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .then((list) => {
         if (cancelled) return;
         setUsers(list.users);
-        // Adopt the backend default (first seeded user) if nothing stored.
-        if (!getStoredUserId() && list.users.length > 0) {
-          setStoredUserId(list.users[0].id);
-          setCurrentUserId(list.users[0].id);
-        }
       })
       .catch(() => {
-        /* the rail shows a degraded state; pages surface their own errors */
+        /* the bar shows a degraded state; pages surface their own errors */
       });
-    refreshBalance();
+    // No session, no balance to fetch — the login gate handles it.
+    if (getStoredUserId()) refreshBalance();
     return () => {
       cancelled = true;
     };
@@ -88,6 +91,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshBalance],
   );
 
+  const logOut = useCallback(() => {
+    clearStoredUserId();
+    balanceSeq.current++; // drop any in-flight balance for the old session
+    setCurrentUserId(null);
+    setBalance(null);
+    setBalanceError(false);
+  }, []);
+
   const currentUser = useMemo(
     () => users.find((u) => u.id === currentUserId) ?? null,
     [users, currentUserId],
@@ -99,11 +110,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       currentUserId,
       currentUser,
       switchUser,
+      logOut,
       balance,
       balanceError,
       refreshBalance,
     }),
-    [users, currentUserId, currentUser, switchUser, balance, balanceError, refreshBalance],
+    [
+      users,
+      currentUserId,
+      currentUser,
+      switchUser,
+      logOut,
+      balance,
+      balanceError,
+      refreshBalance,
+    ],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

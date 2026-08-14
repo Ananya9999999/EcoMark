@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Bricolage_Grotesque, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Shell } from "@/components/Shell";
 
@@ -9,28 +9,29 @@ const bricolage = Bricolage_Grotesque({
   weight: ["500", "600", "700"],
 });
 
-const plexSans = IBM_Plex_Sans({
-  variable: "--font-plex-sans",
+const interTight = Inter_Tight({
+  variable: "--font-inter-tight",
   subsets: ["latin"],
   weight: ["400", "500", "600"],
 });
 
-const plexMono = IBM_Plex_Mono({
-  variable: "--font-plex-mono",
+const jetbrains = JetBrains_Mono({
+  variable: "--font-jetbrains",
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
-  title: "Orbit — carbon credit verification",
-  description: "Log climate actions, get them verified, trade the credits.",
+  title: "EcoMark — proof, not promises",
+  description:
+    "Log a real-world climate action, have it verified against evidence, and hold the credit it earns.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${bricolage.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
+      className={`${bricolage.variable} ${interTight.variable} ${jetbrains.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         <Shell>{children}</Shell>

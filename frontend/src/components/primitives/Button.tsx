@@ -6,12 +6,12 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-limb text-night-ocean font-semibold hover:brightness-110 active:brightness-95 disabled:opacity-40",
+    "bg-signal text-void font-medium hover:brightness-110 active:brightness-95 disabled:opacity-35",
   secondary:
-    "bg-terrace text-airglow border border-[var(--rule-strong)] hover:brightness-110 disabled:opacity-40",
-  ghost: "text-graticule hover:text-airglow hover:bg-[var(--graticule-dim)] disabled:opacity-40",
+    "border border-line bg-elevated text-primary hover:border-signal-dim disabled:opacity-35",
+  ghost: "text-secondary hover:bg-[var(--muted-wash)] hover:text-primary disabled:opacity-35",
   danger:
-    "bg-[var(--oxide-dim)] text-oxide border border-[var(--oxide)] hover:brightness-110 disabled:opacity-40",
+    "border border-[var(--alert)] bg-[var(--alert-wash)] text-[var(--alert)] hover:brightness-110 disabled:opacity-35",
 };
 
 export function Button({
@@ -23,7 +23,7 @@ export function Button({
   return (
     <button
       {...rest}
-      className={`inline-flex items-center justify-center gap-2 rounded-[var(--radius-row)] px-4 py-2 text-sm transition-[filter,transform] duration-150 hover:-translate-y-px active:translate-y-0 disabled:pointer-events-none ${VARIANTS[variant]} ${className}`}
+      className={`t-14 inline-flex items-center justify-center gap-2 rounded-[var(--r-row)] px-4 py-2.5 transition-[filter,border-color,background-color] duration-[var(--d-quick)] disabled:pointer-events-none ${VARIANTS[variant]} ${className}`}
     >
       {children}
     </button>

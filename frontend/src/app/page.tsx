@@ -1,179 +1,130 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+/**
+ * Landing — the one moment of spectacle (design.md §5).
+ *
+ * Particles coalesce into the EcoMark seal. Pressing Enter disperses it and
+ * moves into the app. After this, the interface stays quiet: the subject is
+ * serious and the entrance has already made its point.
+ */
+
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
-import { listClaims, messageFrom } from "@/lib/api";
-import { useApp } from "@/lib/app-context";
-import { CATEGORIES, isTerminal, type ClaimSummary } from "@/lib/types";
-import { usePolling } from "@/lib/usePolling";
-import { Button } from "@/components/primitives/Button";
-import { CATEGORY_COLOR, CategoryDot } from "@/components/primitives/CategoryDot";
-import { ErrorPanel } from "@/components/primitives/ErrorPanel";
-import { SkeletonBlock, SkeletonRows } from "@/components/primitives/Skeleton";
-import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
-import { ClaimRow } from "@/components/claims/ClaimRow";
+import { AtmosphericField } from "@/components/three/AtmosphericField";
+import { SEAL_MIX } from "@/components/three/ParticleField";
+import { getStoredUserId } from "@/lib/api";
 
-/** The ledger strip: four category readouts whose bar lengths are the chart. */
-function BalanceStrip() {
-  const { balance, balanceError, refreshBalance } = useApp();
+export default function Landing() {
+  const router = useRouter();
+  const [entering, setEntering] = useState(false);
 
-  if (balanceError) {
-    return (
-      <ErrorPanel
-        message="Your balance can't be read right now. The rest of the dashboard still works."
-        onRetry={() => refreshBalance()}
-      />
-    );
-  }
-  if (balance == null) {
-    return <SkeletonBlock className="h-44 w-full" />;
-  }
-
-  const max = Math.max(...CATEGORIES.map((c) => balance.balances[c] ?? 0), 0.001);
-
-  return (
-    <section aria-label="Credit balance" className="surface-shelf p-6">
-      <div className="mb-4 flex items-end justify-between gap-4">
-        <span className="type-label-xs">Balance</span>
-        <div className="text-right">
-          <div className="type-mono-l text-airglow">
-            <AnimatedNumber value={balance.total} decimals={1} />
-          </div>
-          <div className="text-xs text-graticule">credits total</div>
-        </div>
-      </div>
-      <dl className="flex flex-col gap-2.5">
-        {CATEGORIES.map((cat, i) => {
-          const amount = balance.balances[cat] ?? 0;
-          return (
-            <div key={cat} className="grid grid-cols-[6rem_1fr_3.5rem] items-center gap-3">
-              <dt className="flex items-center gap-2 text-sm text-graticule">
-                <CategoryDot category={cat} />
-                {cat}
-              </dt>
-              <dd className="h-2 overflow-hidden rounded-full bg-night-ocean">
-                <motion.div
-                  className="h-full rounded-full"
-                  style={{ background: CATEGORY_COLOR[cat] }}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(amount / max) * 100}%` }}
-                  transition={{ duration: 0.6, delay: i * 0.06, ease: "easeOut" }}
-                />
-              </dd>
-              <dd className="type-mono-s text-right text-airglow">
-                <AnimatedNumber value={amount} decimals={1} />
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
-    </section>
-  );
-}
-
-function RecentClaims() {
-  const [claims, setClaims] = useState<ClaimSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const { currentUserId, refreshBalance } = useApp();
-  const hadLive = useRef(false);
-  // Drop responses for a user we have already switched away from.
-  const seq = useRef(0);
-
-  const load = useCallback(() => {
-    const mySeq = ++seq.current;
-    listClaims({ limit: 5 })
-      .then((list) => {
-        if (mySeq !== seq.current) return;
-        setClaims(list.claims);
-        setError(null);
-        const hasLive = list.claims.some((c) => !isTerminal(c.status));
-        // A claim just reached a terminal state — the balance may have moved.
-        if (hadLive.current && !hasLive) refreshBalance();
-        hadLive.current = hasLive;
-      })
-      .catch((e) => {
-        if (mySeq !== seq.current) return;
-        setError(messageFrom(e, "Recent claims could not be loaded"));
-      });
-  }, [refreshBalance]);
+  const enter = useCallback(() => {
+    if (entering) return;
+    setEntering(true);
+    // Let the dispersal play, then continue to the app.
+    const destination = getStoredUserId() ? "/dashboard" : "/login";
+    window.setTimeout(() => router.push(destination), 620);
+  }, [entering, router]);
 
   useEffect(() => {
-    setClaims(null);
-    hadLive.current = false;
-    load();
-  }, [load, currentUserId]);
-
-  // Keep in-flight rows live, like the history page.
-  usePolling(load, claims?.some((c) => !isTerminal(c.status)) ?? false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter") enter();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enter]);
 
   return (
-    <section aria-label="Recent claims" className="surface-shelf min-w-0 flex-[1.6] p-0">
-      <div className="flex items-center justify-between px-6 pb-2 pt-5">
-        <span className="type-label-xs">Recent claims</span>
-        <Link href="/claims" className="text-xs text-limb hover:underline">
-          All claims →
-        </Link>
-      </div>
-      {error ? (
-        <div className="p-4">
-          <ErrorPanel message={error} onRetry={load} />
-        </div>
-      ) : claims == null ? (
-        <SkeletonRows count={5} />
-      ) : claims.length === 0 ? (
-        <div className="px-6 pb-6 pt-2">
-          <p className="mb-4 text-sm text-graticule">
-            Nothing verified yet. Log your first climate action and watch it become credits.
-          </p>
-          <Link href="/claims/new">
-            <Button>Make a claim</Button>
-          </Link>
-        </div>
-      ) : (
-        <ul className="flex flex-col divide-y divide-[var(--rule)]">
-          {claims.map((claim, i) => (
-            <ClaimRow key={claim.claim_id} claim={claim} index={i} />
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
+    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6">
+      <AtmosphericField
+        mode={entering ? "disperse" : "seal"}
+        mix={SEAL_MIX}
+        className="pointer-events-none absolute inset-0"
+      />
+      {/* soft floor under the emblem so the wordmark reads cleanly */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2"
+        style={{
+          background:
+            "linear-gradient(to bottom, transparent, var(--bg-void) 42%)",
+        }}
+      />
 
-function ActionPanel() {
-  return (
-    <section className="surface-shelf flex flex-1 flex-col items-start gap-3 p-6">
-      <h2 className="type-display-m">Make a claim</h2>
-      <p className="text-sm text-graticule">
-        Log an action you have taken — planting, solar, an EV, a lower bill, a greener
-        commute — and have it verified from orbit, from documents, or from trip logs.
-      </p>
-      <Link href="/claims/new" className="mt-2">
-        <Button>Make a claim</Button>
-      </Link>
-    </section>
-  );
-}
+      <motion.div
+        className="relative z-10 mt-[36vh] flex flex-col items-center text-center"
+        animate={entering ? { opacity: 0, y: -12 } : { opacity: 1, y: 0 }}
+        transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <motion.p
+          className="t-label mb-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.9, duration: 0.6 }}
+        >
+          Carbon verification instrument
+        </motion.p>
 
-export default function Dashboard() {
-  const { currentUser } = useApp();
-  return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6">
-      <header>
-        <h1 className="type-display-l">
-          {currentUser ? `${currentUser.name}'s ledger` : "Ledger"}
-        </h1>
-        <p className="mt-1 text-sm text-graticule">
-          Verified climate actions, measured and credited.
-        </p>
-      </header>
-      <BalanceStrip />
-      <div className="flex flex-col gap-6 lg:flex-row">
-        <RecentClaims />
-        <ActionPanel />
-      </div>
-    </div>
+        <motion.h1
+          className="t-64 text-primary"
+          style={{ letterSpacing: "-0.04em" }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.05, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+        >
+          EcoMark
+        </motion.h1>
+
+        <motion.p
+          className="t-16 mt-4 max-w-md text-secondary"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.3, duration: 0.7 }}
+        >
+          Proof, not promises. Log a real-world climate action, have it
+          verified against evidence, and hold the credit it earns.
+        </motion.p>
+
+        <motion.div
+          className="mt-10 flex flex-col items-center gap-3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.6, duration: 0.6 }}
+        >
+          <button
+            onClick={enter}
+            className="field group flex items-center gap-3 border-signal-dim px-6 py-3 text-primary transition-colors hover:border-signal"
+            style={{ borderRadius: "var(--r-row)" }}
+          >
+            <span className="t-14">Enter</span>
+            <span className="mono-12 text-secondary group-hover:text-signal">↵</span>
+          </button>
+          <span className="mono-12 text-muted">or press Enter</span>
+        </motion.div>
+      </motion.div>
+
+      {/* instrument footer — measured values, set as data */}
+      <motion.div
+        className="absolute bottom-6 left-0 right-0 z-10 flex justify-center gap-8 px-6"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: entering ? 0 : 1 }}
+        transition={{ delay: 1.9, duration: 0.6 }}
+      >
+        {[
+          ["METHODS", "3"],
+          ["CATEGORIES", "4"],
+          ["LEDGER", "ON-CHAIN"],
+        ].map(([label, value]) => (
+          <div key={label} className="flex flex-col items-center gap-1">
+            <span className="mono-12 text-secondary">{value}</span>
+            <span className="t-label" style={{ fontSize: 12 }}>
+              {label}
+            </span>
+          </div>
+        ))}
+      </motion.div>
+    </main>
   );
 }

@@ -37,6 +37,10 @@ export function setStoredUserId(id: string): void {
   window.localStorage.setItem(USER_KEY, id);
 }
 
+export function clearStoredUserId(): void {
+  window.localStorage.removeItem(USER_KEY);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   const userId = getStoredUserId();

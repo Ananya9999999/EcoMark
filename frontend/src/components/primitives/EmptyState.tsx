@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Invites the action that creates the missing content (7.8, 8.7). */
+/** Invites the action that creates the missing content (§8.6, §12.1). */
 export function EmptyState({
   title,
   body,
@@ -11,10 +11,10 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="surface-shelf flex flex-col items-start gap-2 p-8">
-      <h3 className="type-display-m">{title}</h3>
-      <p className="max-w-md text-sm text-graticule">{body}</p>
-      {action && <div className="mt-3">{action}</div>}
+    <div className="panel flex flex-col items-start gap-2 p-8">
+      <h3 className="t-20 text-primary">{title}</h3>
+      <p className="t-14 max-w-md text-secondary">{body}</p>
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
