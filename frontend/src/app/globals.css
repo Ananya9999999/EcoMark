@@ -1,26 +1,225 @@
 @import "tailwindcss";
 
+/*
+ * Every value in this file derives from docs/design.md.
+ * Core palette: night-ocean / shelf / terrace surfaces, airglow + graticule
+ * ink, limb accent. Data ramp: chlorophyll, sodium, bathymetry, nir-magenta,
+ * oxide — bound to meaning, never used as chrome.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* surfaces (design.md §1 core) */
+  --night-ocean: #0e141a;
+  --shelf: #161f27;
+  --terrace: #1f2c36;
+
+  /* ink */
+  --airglow: #dce6ec;
+  --graticule: #7e909c;
+
+  /* accent */
+  --limb: #5cc8db;
+
+  /* data ramp (design.md §1) — encoded values only */
+  --chlorophyll: #93c356; /* land */
+  --sodium: #e4a34a; /* energy */
+  --bathymetry: #4c9fd0; /* water */
+  --nir-magenta: #c77dbe; /* transport */
+  --oxide: #c4573f; /* rejection, errors */
+
+  /* derived tints for badges and fills */
+  --limb-dim: rgba(92, 200, 219, 0.14);
+  --chlorophyll-dim: rgba(147, 195, 86, 0.14);
+  --sodium-dim: rgba(228, 163, 74, 0.14);
+  --bathymetry-dim: rgba(76, 159, 208, 0.14);
+  --nir-magenta-dim: rgba(199, 125, 190, 0.14);
+  --oxide-dim: rgba(196, 87, 63, 0.16);
+  --graticule-dim: rgba(126, 144, 156, 0.14);
+
+  /* elevation (design.md §3 depth: surface step + top highlight + ambient occlusion) */
+  --edge-highlight: inset 0 1px 0 rgba(220, 230, 236, 0.07);
+  --edge-highlight-strong: inset 0 1px 0 rgba(220, 230, 236, 0.12);
+  --ambient-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.55);
+  --contact-shadow: 0 2px 6px -2px rgba(0, 0, 0, 0.5);
+
+  /* radii track object scale (design.md §3): inputs/badges 2, rows 6, panels 14 */
+  --radius-instrument: 2px;
+  --radius-row: 6px;
+  --radius-panel: 14px;
+
+  /* hairlines */
+  --rule: rgba(126, 144, 156, 0.18);
+  --rule-strong: rgba(126, 144, 156, 0.32);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-night-ocean: var(--night-ocean);
+  --color-shelf: var(--shelf);
+  --color-terrace: var(--terrace);
+  --color-airglow: var(--airglow);
+  --color-graticule: var(--graticule);
+  --color-limb: var(--limb);
+  --color-chlorophyll: var(--chlorophyll);
+  --color-sodium: var(--sodium);
+  --color-bathymetry: var(--bathymetry);
+  --color-nir-magenta: var(--nir-magenta);
+  --color-oxide: var(--oxide);
+
+  --font-display: var(--font-bricolage);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+
+  --radius-instrument: 2px;
+  --radius-row: 6px;
+  --radius-panel: 14px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--night-ocean);
+  color: var(--airglow);
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
+  font-size: 0.9375rem; /* body-m */
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ----- type scale (design.md §2) ----- */
+
+.type-display-xl {
+  font-family: var(--font-bricolage), sans-serif;
+  font-size: 3.25rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.type-display-l {
+  font-family: var(--font-bricolage), sans-serif;
+  font-size: 2.25rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.type-display-m {
+  font-family: var(--font-bricolage), sans-serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.type-body-l {
+  font-size: 1.0625rem;
+  letter-spacing: -0.005em;
+  line-height: 1.55;
+}
+
+.type-body-s {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.type-label-xs {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--graticule);
+}
+
+.type-mono-l {
+  font-family: var(--font-plex-mono), monospace;
+  font-size: 1.75rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.type-mono-m {
+  font-family: var(--font-plex-mono), monospace;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.type-mono-s {
+  font-family: var(--font-plex-mono), monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----- elevation strata (design.md §3) ----- */
+
+.surface-shelf {
+  background: var(--shelf);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--edge-highlight), var(--ambient-shadow);
+}
+
+.surface-terrace {
+  background: var(--terrace);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-row);
+  box-shadow: var(--edge-highlight-strong), var(--contact-shadow);
+}
+
+/* ----- focus (quality floor 7.7) ----- */
+
+:focus-visible {
+  outline: 2px solid var(--limb);
+  outline-offset: 2px;
+  border-radius: var(--radius-instrument);
+}
+
+::selection {
+  background: rgba(92, 200, 219, 0.3);
+}
+
+/* ----- skeletons ----- */
+
+.skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--shelf) 40%,
+    var(--terrace) 50%,
+    var(--shelf) 60%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease infinite;
+  border-radius: var(--radius-row);
+}
+
+@keyframes skeleton-sweep {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* thin scrollbars that match the instrument look */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--terrace) transparent;
 }
