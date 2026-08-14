@@ -21,7 +21,13 @@ import * as THREE from "three";
 
 import { particleBudget } from "@/lib/capabilities";
 
-export type FieldMode = "seal" | "disperse" | "ambient";
+/**
+ * seal     — the full emblem drawn in particles
+ * rings    — orbit rings only, so a real logo can sit at their centre
+ * disperse — the formation breaking apart on entry
+ * ambient  — the calm field behind the app header
+ */
+export type FieldMode = "seal" | "rings" | "disperse" | "ambient";
 
 export interface ParticleFieldProps {
   mode: FieldMode;
@@ -44,11 +50,29 @@ const CATEGORY_COLORS = {
  * logo — body, two solar-panel wings, dish — inside two orbit rings.
  * Built from maths, so the emblem costs nothing to ship.
  */
-function buildSealTargets(count: number): Float32Array {
+function buildSealTargets(count: number, ringsOnly = false): Float32Array {
   const out = new Float32Array(count * 3);
   const TILT = -0.62; // radians, matching the logo's diagonal
   const cos = Math.cos(TILT);
   const sin = Math.sin(TILT);
+
+  if (ringsOnly) {
+    // Three concentric orbit paths framing whatever sits at the centre.
+    for (let i = 0; i < count; i++) {
+      const lane = i % 3;
+      const r = [1.62, 1.86, 2.08][lane];
+      let a = (Math.floor(i / 3) / (count / 3)) * Math.PI * 2;
+      const seg = a % (Math.PI * 2);
+      // gaps so each path reads as an orbit rather than a plain circle
+      if (lane === 1 && seg > 2.4 && seg < 3.0) a += 0.75;
+      if (lane === 2 && seg > 5.4 && seg < 6.0) a += 0.6;
+      const jitter = 1 + (Math.random() - 0.5) * 0.016;
+      out[i * 3] = Math.cos(a) * r * jitter;
+      out[i * 3 + 1] = Math.sin(a) * r * jitter * 0.97;
+      out[i * 3 + 2] = (Math.random() - 0.5) * 0.16;
+    }
+    return out;
+  }
 
   // place a point in the satellite's own tilted frame
   const put = (i: number, u: number, v: number, depth = 0.05) => {
@@ -162,7 +186,10 @@ function Particles({ mode, order = 0.4, mix }: Omit<ParticleFieldProps, "classNa
     return { cloud, drift, current, phase };
   }, [count]);
 
-  const seal = useMemo(() => buildSealTargets(count), [count]);
+  const seal = useMemo(
+    () => buildSealTargets(count, mode === "rings"),
+    [count, mode],
+  );
   const lattice = useMemo(() => buildLatticeTargets(count), [count]);
 
   // Colour each instance once from the category mix.
@@ -206,7 +233,11 @@ function Particles({ mode, order = 0.4, mix }: Omit<ParticleFieldProps, "classNa
     const { current, cloud, drift, phase } = state;
     // How strongly particles are pulled toward their target formation.
     const pull =
-      mode === "seal" ? 2.6 : mode === "ambient" ? 0.35 + order * 1.1 : 0;
+      mode === "seal" || mode === "rings"
+        ? 2.6
+        : mode === "ambient"
+          ? 0.35 + order * 1.1
+          : 0;
 
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
@@ -214,7 +245,7 @@ function Particles({ mode, order = 0.4, mix }: Omit<ParticleFieldProps, "classNa
       let ty: number;
       let tz: number;
 
-      if (mode === "seal") {
+      if (mode === "seal" || mode === "rings") {
         tx = seal[i3];
         ty = seal[i3 + 1];
         tz = seal[i3 + 2];
@@ -249,7 +280,7 @@ function Particles({ mode, order = 0.4, mix }: Omit<ParticleFieldProps, "classNa
       }
 
       dummy.position.set(current[i3], current[i3 + 1], current[i3 + 2]);
-      const s = mode === "seal" ? 0.016 : 0.013;
+      const s = mode === "seal" || mode === "rings" ? 0.016 : 0.013;
       dummy.scale.setScalar(s);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
@@ -257,11 +288,13 @@ function Particles({ mode, order = 0.4, mix }: Omit<ParticleFieldProps, "classNa
     mesh.instanceMatrix.needsUpdate = true;
 
     // Slow rotation only while the seal is held.
-    if (mode === "seal") mesh.rotation.z = Math.sin(elapsed.current * 0.12) * 0.06;
+    // Rings turn slowly; the full seal only breathes.
+    if (mode === "rings") mesh.rotation.z = elapsed.current * 0.055;
+    else if (mode === "seal") mesh.rotation.z = Math.sin(elapsed.current * 0.12) * 0.06;
   });
 
   // The emblem sits above centre so the wordmark can sit beneath it.
-  const groupY = mode === "seal" ? 1.15 : 0;
+  const groupY = mode === "seal" || mode === "rings" ? 1.15 : 0;
 
   return (
     <group position={[0, groupY, 0]}>
@@ -278,6 +311,8 @@ function CameraRig({ mode }: { mode: FieldMode }) {
   const { camera } = useThree();
   useEffect(() => {
     camera.position.z = mode === "ambient" ? 4.2 : 7.4;
+    // rings sit slightly wider, so pull back a touch more
+    if (mode === "rings") camera.position.z = 7.9;
     camera.updateProjectionMatrix();
   }, [camera, mode]);
   return null;

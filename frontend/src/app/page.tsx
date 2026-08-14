@@ -8,6 +8,7 @@
  * serious and the entrance has already made its point.
  */
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -39,10 +40,30 @@ export default function Landing() {
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6">
       <AtmosphericField
-        mode={entering ? "disperse" : "seal"}
+        mode={entering ? "disperse" : "rings"}
         mix={SEAL_MIX}
         className="pointer-events-none absolute inset-0"
       />
+
+      {/* The brand mark sits at the centre of the orbit paths. */}
+      <motion.div
+        className="pointer-events-none absolute left-1/2 top-[33%] z-10 -translate-x-1/2 -translate-y-1/2"
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={
+          entering ? { opacity: 0, scale: 1.35 } : { opacity: 1, scale: 1 }
+        }
+        transition={{ delay: entering ? 0 : 0.5, duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <Image
+          src="/mark.png"
+          alt="EcoMark"
+          width={200}
+          height={200}
+          priority
+          className="h-36 w-36 md:h-48 md:w-48"
+          style={{ filter: "drop-shadow(0 0 40px rgba(110,231,168,0.4))" }}
+        />
+      </motion.div>
       {/* soft floor under the emblem so the wordmark reads cleanly */}
       <div
         aria-hidden
@@ -54,17 +75,17 @@ export default function Landing() {
       />
 
       <motion.div
-        className="relative z-10 mt-[36vh] flex flex-col items-center text-center"
+        className="relative z-10 mt-[58vh] flex flex-col items-center text-center"
         animate={entering ? { opacity: 0, y: -12 } : { opacity: 1, y: 0 }}
         transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
       >
         <motion.p
-          className="t-label mb-6"
+          className="t-label mb-5"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.9, duration: 0.6 }}
         >
-          Carbon verification instrument
+          Verify · Credit · Impact
         </motion.p>
 
         <motion.h1

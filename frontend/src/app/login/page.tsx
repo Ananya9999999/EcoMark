@@ -6,6 +6,7 @@
  * header used by every request; Log out clears it.
  */
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -46,18 +47,19 @@ export default function LoginPage() {
         transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
         className="panel relative z-10 w-full max-w-md p-8"
       >
-        <div className="mb-1 flex items-center gap-2">
-          <span
-            aria-hidden
-            className="inline-block h-3 w-3 rotate-45 border border-signal"
-            style={{ boxShadow: "0 0 10px rgba(110,231,168,0.55)" }}
-          />
-          <span
-            className="font-display text-primary"
-            style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.02em" }}
-          >
-            EcoMark
-          </span>
+        <div className="mb-1 flex items-center gap-3">
+          <Image src="/mark.png" alt="" width={44} height={44} priority className="h-11 w-11" />
+          <div>
+            <span
+              className="font-display block text-primary"
+              style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em" }}
+            >
+              EcoMark
+            </span>
+            <span className="t-label" style={{ fontSize: 12 }}>
+              Verify · Credit · Impact
+            </span>
+          </div>
         </div>
 
         <h1 className="t-28 mt-5 text-primary">Choose a profile</h1>

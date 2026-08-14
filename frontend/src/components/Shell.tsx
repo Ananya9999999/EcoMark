@@ -8,6 +8,7 @@
  * The landing and login screens render bare, without the bar.
  */
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -27,10 +28,13 @@ const BARE_ROUTES = ["/", "/login"];
 function Wordmark() {
   return (
     <Link href="/dashboard" className="flex shrink-0 items-center gap-2">
-      <span
-        aria-hidden
-        className="inline-block h-3 w-3 rotate-45 border border-signal"
-        style={{ boxShadow: "0 0 10px rgba(110,231,168,0.55)" }}
+      <Image
+        src="/mark.png"
+        alt=""
+        width={28}
+        height={28}
+        priority
+        className="h-7 w-7 shrink-0"
       />
       <span
         className="font-display text-primary"
