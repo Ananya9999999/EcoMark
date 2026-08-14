@@ -101,6 +101,7 @@ function SessionControl() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label={`Account menu for ${currentUser.name}`}
         className="flex items-center gap-2 rounded-[var(--r-instrument)] px-2 py-1.5 text-secondary transition-colors hover:text-primary"
       >
         <span
