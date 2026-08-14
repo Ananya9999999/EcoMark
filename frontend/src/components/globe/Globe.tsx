@@ -30,6 +30,8 @@ export interface GlobeProps {
   lng: number | null;
   radiusM: number;
   interactive?: boolean;
+  /** Camera distance. The location funnel drives this per level. */
+  zoom?: number;
   /** Fires when the user drops the pin by clicking the sphere. */
   onPick?: (lat: number, lng: number) => void;
   /** Fires if the WebGL context is lost — parents swap in the fallback. */
@@ -129,6 +131,7 @@ function EarthScene({
   lng,
   radiusM,
   interactive = true,
+  zoom,
   onPick,
 }: Omit<GlobeProps, "className" | "onContextLost">) {
   const texture = useLoader(THREE.TextureLoader, "/earth_day.jpg");
@@ -139,9 +142,10 @@ function EarthScene({
   const { camera, invalidate } = useThree();
   const hasPin = lat != null && lng != null;
   // Camera journey state — refs, not React state, to keep frames cheap.
-  const journey = useRef<{ target: THREE.Vector3; active: boolean }>({
+  const journey = useRef<{ target: THREE.Vector3; active: boolean; distance: number }>({
     target: new THREE.Vector3(),
     active: false,
+    distance: zoom ?? 2.6,
   });
   const interacted = useRef(false);
   const downAt = useRef<{ x: number; y: number } | null>(null);
@@ -161,6 +165,13 @@ function EarthScene({
     journey.current.active = true;
   }, [lat, lng, interactive, camera, invalidate]);
 
+  // A new zoom level restarts the journey so the camera flies in.
+  useEffect(() => {
+    if (zoom == null) return;
+    journey.current.distance = zoom;
+    if (lat != null && lng != null) journey.current.active = true;
+  }, [zoom, lat, lng]);
+
   useFrame((state, delta) => {
     const controls = controlsRef.current;
     // Ambient rotation at rest, until the user takes over or a pin exists.
@@ -172,13 +183,24 @@ function EarthScene({
     // Eased travel: swing the camera direction toward the pin.
     if (journey.current.active) {
       const cam = state.camera;
-      const distance = cam.position.length();
+      // ease the direction toward the target and the distance toward the level
+      const wanted = journey.current.distance;
+      const distance = THREE.MathUtils.lerp(
+        cam.position.length(),
+        wanted,
+        Math.min(1, delta * 3),
+      );
       _current.copy(cam.position).normalize();
       _goal.copy(journey.current.target).normalize();
       _current.lerp(_goal, Math.min(1, delta * 4)).normalize();
       cam.position.copy(_current).multiplyScalar(distance);
       cam.lookAt(0, 0, 0);
-      if (_current.angleTo(_goal) < 0.005) journey.current.active = false;
+      if (
+        _current.angleTo(_goal) < 0.004 &&
+        Math.abs(distance - wanted) < 0.01
+      ) {
+        journey.current.active = false;
+      }
     }
     controls?.update();
   });
@@ -213,11 +235,14 @@ function EarthScene({
         <OrbitControls
           ref={controlsRef}
           enablePan={false}
+          // Wheel zoom is off on purpose: it used to swallow the page scroll,
+          // trapping the user on this section. The funnel sets the zoom level.
+          enableZoom={false}
           enableDamping
           dampingFactor={0.08}
           rotateSpeed={0.55}
           autoRotateSpeed={0.4}
-          minDistance={1.6}
+          minDistance={1.2}
           maxDistance={4.5}
         />
       )}

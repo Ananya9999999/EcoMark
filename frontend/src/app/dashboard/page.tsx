@@ -111,7 +111,7 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* header band with the field behind it */}
-      <header className="relative -mx-4 -mt-8 overflow-hidden px-4 pb-8 pt-10 md:-mx-6 md:-mt-10 md:px-6 md:pt-14">
+      <header className="relative -mx-4 -mt-20 overflow-hidden px-4 pb-8 pt-24 md:-mx-8 md:-mt-10 md:px-8 md:pb-10 md:pt-14 lg:-mx-12 lg:px-12">
         <AtmosphericField
           mode="ambient"
           order={order}

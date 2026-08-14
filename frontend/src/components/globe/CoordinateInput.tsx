@@ -1,29 +1,32 @@
 "use client";
 
 /**
- * Coordinate input for satellite claims. Emits { lat, lng, radius_m }.
+ * Coordinate input for satellite claims — a strict funnel.
  *
- * Picking a point on a bare globe is guesswork, so the control narrows in
- * steps: country → region → place → exact point. Each step flies the globe
- * to the selection; the pin can then be dragged or clicked anywhere, and
- * typed search or plain number entry reach the same result.
+ *   country → state → city → PIN code → exact point
  *
- * The globe is the primary input; the numeric fields are the keyboard path
- * and the required fallback when WebGL or motion preferences rule it out.
+ * Each step stays disabled until the one above it is answered, and the
+ * globe flies and zooms in at every level. Once a PIN code is set, clicking
+ * the globe records the precise point; if the user never clicks, the PIN
+ * code's own coordinates stand as the approximate location.
+ *
+ * The lat/lng fields below are always live, and are the complete keyboard
+ * path and the fallback when WebGL or motion preferences rule the globe out.
  */
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 
 import { formatLatLng, formatRadius } from "@/lib/format";
 import { prefersReducedMotion } from "@/lib/capabilities";
 import {
   COUNTRIES,
-  searchEverything,
-  searchOnline,
+  lookupPostalOnline,
+  ZOOM,
+  type City,
   type Country,
-  type Place,
-  type Region,
+  type Pin,
+  type State,
 } from "./places";
 
 const Globe = dynamic(() => import("./Globe"), { ssr: false });
@@ -43,6 +46,34 @@ function webglAvailable(): boolean {
   }
 }
 
+/** One step of the funnel. Locked until the previous step is answered. */
+function Step({
+  index,
+  label,
+  hint,
+  enabled,
+  children,
+}: {
+  index: number;
+  label: string;
+  hint?: string;
+  enabled: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={enabled ? "" : "pointer-events-none opacity-40"}>
+      <div className="mb-1.5 flex items-baseline gap-2">
+        <span className={`mono-12 ${enabled ? "text-signal" : "text-muted"}`}>
+          {String(index).padStart(2, "0")}
+        </span>
+        <label className="t-label">{label}</label>
+        {hint && <span className="mono-12 text-muted">{hint}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export function CoordinateInput({
   value,
   onChange,
@@ -52,15 +83,17 @@ export function CoordinateInput({
 }) {
   const [showGlobe, setShowGlobe] = useState<boolean | null>(null);
   const [country, setCountry] = useState<Country | null>(null);
-  const [region, setRegion] = useState<Region | null>(null);
-  const [query, setQuery] = useState("");
-  const [onlineHits, setOnlineHits] = useState<Place[]>([]);
-  const [dismissed, setDismissed] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<State | null>(null);
+  const [city, setCity] = useState<City | null>(null);
+  const [pin, setPin] = useState<Pin | null>(null);
+  const [pinText, setPinText] = useState("");
+  const [pinStatus, setPinStatus] = useState<"idle" | "looking" | "found" | "unknown">("idle");
+  const [pinnedExactly, setPinnedExactly] = useState(false);
+
   const latId = useId();
   const lngId = useId();
   const radiusId = useId();
-  const searchId = useId();
+  const pinId = useId();
 
   useEffect(() => {
     setShowGlobe(!prefersReducedMotion() && webglAvailable());
@@ -68,42 +101,83 @@ export function CoordinateInput({
 
   const handleContextLost = useCallback(() => setShowGlobe(false), []);
 
-  const localHits = useMemo(
-    () => (dismissed ? [] : searchEverything(query)),
-    [query, dismissed],
-  );
+  const move = (lat: number, lng: number) => onChange({ ...value, lat, lng });
 
-  // Online lookup layers on top, debounced, and never blocks the offline path.
-  useEffect(() => {
-    if (dismissed || query.trim().length < 3) {
-      setOnlineHits([]);
+  // Zoom follows how far down the funnel we are.
+  const zoom = pin
+    ? ZOOM.pin
+    : city
+      ? ZOOM.city
+      : state
+        ? ZOOM.state
+        : country
+          ? ZOOM.country
+          : ZOOM.world;
+
+  const selectCountry = (c: Country | null) => {
+    setCountry(c);
+    setState(null);
+    setCity(null);
+    setPin(null);
+    setPinText("");
+    setPinStatus("idle");
+    setPinnedExactly(false);
+    if (c) move(c.lat, c.lng);
+  };
+
+  const selectState = (s: State | null) => {
+    setState(s);
+    setCity(null);
+    setPin(null);
+    setPinText("");
+    setPinStatus("idle");
+    setPinnedExactly(false);
+    if (s) move(s.lat, s.lng);
+  };
+
+  const selectCity = (c: City | null) => {
+    setCity(c);
+    setPin(null);
+    setPinText("");
+    setPinStatus("idle");
+    setPinnedExactly(false);
+    if (c) move(c.lat, c.lng);
+  };
+
+  const selectPin = (p: Pin) => {
+    setPin(p);
+    setPinText(p.code);
+    setPinStatus("found");
+    setPinnedExactly(false);
+    move(p.lat, p.lng);
+  };
+
+  /** A typed code: match the bundled list, else try online, else keep the city. */
+  const resolveTypedPin = async (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed || !city || !country) return;
+    const known = city.pins.find((p) => p.code.toLowerCase() === trimmed.toLowerCase());
+    if (known) {
+      selectPin(known);
       return;
     }
-    let cancelled = false;
-    const t = window.setTimeout(async () => {
-      const rows = await searchOnline(query);
-      if (!cancelled) setOnlineHits(rows);
-    }, 450);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(t);
-    };
-  }, [query, dismissed]);
-
-  useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setDismissed(true);
-      }
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, []);
-
-  const pick = (lat: number, lng: number) => onChange({ ...value, lat, lng });
+    setPinStatus("looking");
+    const hit = await lookupPostalOnline(trimmed, country.code);
+    if (hit) {
+      const found: Pin = { code: trimmed, lat: hit.lat, lng: hit.lng };
+      setPin(found);
+      setPinStatus("found");
+      setPinnedExactly(false);
+      move(found.lat, found.lng);
+    } else {
+      setPinStatus("unknown");
+    }
+  };
 
   const readout =
     value.lat == null || value.lng == null ? null : formatLatLng(value.lat, value.lng);
+
+  const postalLabel = country?.postalLabel ?? "PIN code";
 
   const numberField = (
     id: string,
@@ -127,197 +201,199 @@ export function CoordinateInput({
         onChange={(e) => {
           const raw = e.target.value;
           onChange({ ...value, [field]: raw === "" ? null : Number(raw) });
+          setPinnedExactly(true);
         }}
         className="field mono-14 w-full"
       />
     </div>
   );
 
+  const selectClass = "field t-14 w-full";
+
   return (
     <div className="flex flex-col gap-5">
-      {/* Step cascade — each level narrows the next */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="t-label">Area</span>
-          <nav aria-label="Location breadcrumb" className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setCountry(null);
-                setRegion(null);
-              }}
-              className={`mono-12 rounded-[var(--r-instrument)] border px-2 py-1 transition-colors ${
-                country
-                  ? "border-line text-secondary hover:text-primary"
-                  : "border-signal bg-[var(--signal-wash)] text-signal"
-              }`}
-            >
-              World
-            </button>
-            {country && (
-              <>
-                <span aria-hidden className="mono-12 text-muted">
-                  ›
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setRegion(null)}
-                  className={`mono-12 rounded-[var(--r-instrument)] border px-2 py-1 transition-colors ${
-                    region
-                      ? "border-line text-secondary hover:text-primary"
-                      : "border-signal bg-[var(--signal-wash)] text-signal"
-                  }`}
-                >
-                  {country.name}
-                </button>
-              </>
-            )}
-            {region && (
-              <>
-                <span aria-hidden className="mono-12 text-muted">
-                  ›
-                </span>
-                <span className="mono-12 rounded-[var(--r-instrument)] border border-signal bg-[var(--signal-wash)] px-2 py-1 text-signal">
-                  {region.name}
-                </span>
-              </>
-            )}
-          </nav>
-        </div>
-
-        {/* the options at the current level */}
-        <div className="flex flex-wrap gap-1.5">
-          {!country &&
-            COUNTRIES.map((c) => (
-              <button
-                key={c.code}
-                type="button"
-                onClick={() => {
-                  setCountry(c);
-                  pick(c.lat, c.lng);
-                }}
-                className="t-12 rounded-[var(--r-instrument)] border border-line px-2.5 py-1.5 text-secondary transition-colors hover:border-signal hover:text-primary"
-              >
+      {/* ---- the funnel ---- */}
+      <div className="panel flex flex-col gap-4 p-5">
+        <Step index={1} label="Country" enabled>
+          <select
+            value={country?.code ?? ""}
+            onChange={(e) =>
+              selectCountry(COUNTRIES.find((c) => c.code === e.target.value) ?? null)
+            }
+            className={selectClass}
+            aria-label="Country"
+          >
+            <option value="">Select a country…</option>
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
                 {c.name}
-              </button>
+              </option>
             ))}
-          {country &&
-            !region &&
-            country.regions.map((r) => (
-              <button
-                key={r.name}
-                type="button"
-                onClick={() => {
-                  setRegion(r);
-                  pick(r.lat, r.lng);
-                }}
-                className="t-12 rounded-[var(--r-instrument)] border border-line px-2.5 py-1.5 text-secondary transition-colors hover:border-signal hover:text-primary"
-              >
-                {r.name}
-              </button>
-            ))}
-          {region &&
-            region.places.map((p) => {
-              const on = value.lat === p.lat && value.lng === p.lng;
-              return (
-                <button
-                  key={p.name}
-                  type="button"
-                  onClick={() => pick(p.lat, p.lng)}
-                  className={`t-12 rounded-[var(--r-instrument)] border px-2.5 py-1.5 transition-colors ${
-                    on
-                      ? "border-signal bg-[var(--signal-wash)] text-signal"
-                      : "border-line text-secondary hover:border-signal hover:text-primary"
-                  }`}
-                >
-                  {p.name}
-                </button>
-              );
-            })}
-        </div>
-        {region && (
-          <p className="mono-12 text-muted">
-            Pick a place, then click the globe to set the exact parcel.
-          </p>
-        )}
-      </div>
+          </select>
+        </Step>
 
-      {showGlobe && (
-        <div className="relative">
-          <div ref={searchRef} className="absolute left-3 top-3 z-10 w-64">
-            <label htmlFor={searchId} className="sr-only">
-              Search for a place
-            </label>
-            <input
-              id={searchId}
-              type="search"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setDismissed(false);
-              }}
-              placeholder="Search any place…"
-              autoComplete="off"
-              className="field t-14 w-full bg-[color-mix(in_srgb,var(--bg-void)_85%,transparent)] backdrop-blur"
-            />
-            {(localHits.length > 0 || onlineHits.length > 0) && (
-              <ul
-                role="listbox"
-                aria-label="Matching places"
-                className="panel-elevated mt-1 max-h-60 overflow-auto py-1"
+        <Step
+          index={2}
+          label="State or region"
+          enabled={!!country}
+          hint={country ? undefined : "choose a country first"}
+        >
+          <select
+            value={state?.name ?? ""}
+            disabled={!country}
+            onChange={(e) =>
+              selectState(country?.states.find((s) => s.name === e.target.value) ?? null)
+            }
+            className={selectClass}
+            aria-label="State or region"
+          >
+            <option value="">Select a state…</option>
+            {country?.states.map((s) => (
+              <option key={s.name} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </Step>
+
+        <Step
+          index={3}
+          label="City or district"
+          enabled={!!state}
+          hint={state ? undefined : "choose a state first"}
+        >
+          <select
+            value={city?.name ?? ""}
+            disabled={!state}
+            onChange={(e) =>
+              selectCity(state?.cities.find((c) => c.name === e.target.value) ?? null)
+            }
+            className={selectClass}
+            aria-label="City or district"
+          >
+            <option value="">Select a city…</option>
+            {state?.cities.map((c) => (
+              <option key={c.name} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </Step>
+
+        <Step
+          index={4}
+          label={postalLabel}
+          enabled={!!city}
+          hint={city ? undefined : "choose a city first"}
+        >
+          <div className="flex flex-col gap-2">
+            {city && city.pins.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {city.pins.map((p) => {
+                  const on = pin?.code === p.code;
+                  return (
+                    <button
+                      key={p.code}
+                      type="button"
+                      onClick={() => selectPin(p)}
+                      className={`mono-12 rounded-[var(--r-instrument)] border px-2 py-1 transition-colors ${
+                        on
+                          ? "border-signal bg-[var(--signal-wash)] text-signal"
+                          : "border-line text-secondary hover:border-signal hover:text-primary"
+                      }`}
+                    >
+                      {p.code}
+                      {p.area ? ` · ${p.area}` : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                id={pinId}
+                type="text"
+                inputMode="numeric"
+                value={pinText}
+                disabled={!city}
+                placeholder={`Or type any ${postalLabel.toLowerCase()}`}
+                onChange={(e) => {
+                  setPinText(e.target.value);
+                  setPinStatus("idle");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    resolveTypedPin(pinText);
+                  }
+                }}
+                className="field mono-14 flex-1"
+                aria-label={postalLabel}
+              />
+              <button
+                type="button"
+                disabled={!city || !pinText.trim()}
+                onClick={() => resolveTypedPin(pinText)}
+                className="field t-14 shrink-0 px-3 text-secondary transition-colors hover:border-signal hover:text-signal disabled:opacity-40"
               >
-                {localHits.map((h) => (
-                  <li key={`l-${h.label}`}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCountry(h.country);
-                        setRegion(h.region ?? null);
-                        pick(h.lat, h.lng);
-                        setQuery("");
-                      }}
-                      className="t-14 w-full px-3 py-2 text-left text-primary transition-colors hover:bg-[var(--signal-wash)]"
-                    >
-                      {h.label}
-                    </button>
-                  </li>
-                ))}
-                {onlineHits.map((h) => (
-                  <li key={`o-${h.name}`}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        pick(Number(h.lat.toFixed(4)), Number(h.lng.toFixed(4)));
-                        setQuery("");
-                      }}
-                      className="w-full px-3 py-2 text-left transition-colors hover:bg-[var(--signal-wash)]"
-                    >
-                      <span className="t-14 line-clamp-1 text-secondary">{h.name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                {pinStatus === "looking" ? "Locating…" : "Locate"}
+              </button>
+            </div>
+            {pinStatus === "unknown" && (
+              <p className="mono-12 text-[var(--ember)]">
+                That code isn&apos;t in the offline list and no lookup was reachable. The
+                city centre is being used — drop a pin on the globe to be exact.
+              </p>
             )}
           </div>
+        </Step>
+      </div>
 
+      {/* ---- the globe ---- */}
+      {showGlobe && (
+        <div className="relative">
           <Globe
             lat={value.lat}
             lng={value.lng}
             radiusM={value.radius_m}
             interactive
-            onPick={pick}
+            zoom={zoom}
+            onPick={(lat, lng) => {
+              move(lat, lng);
+              setPinnedExactly(true);
+            }}
             onContextLost={handleContextLost}
             className="h-80 w-full overflow-hidden rounded-[var(--r-panel)] border border-line bg-void md:h-96"
           />
 
-          <div className="pointer-events-none absolute bottom-3 left-3 rounded-[var(--r-instrument)] bg-[color-mix(in_srgb,var(--bg-void)_85%,transparent)] px-2.5 py-1.5 backdrop-blur">
-            <span className="mono-12 text-signal">
-              {readout ?? "click the globe to drop a pin"}
+          <div className="pointer-events-none absolute bottom-3 left-3 right-3 flex flex-wrap items-center gap-2">
+            <span className="mono-12 rounded-[var(--r-instrument)] bg-[color-mix(in_srgb,var(--bg-void)_88%,transparent)] px-2.5 py-1.5 text-signal backdrop-blur">
+              {readout ?? "select a country to begin"}
             </span>
+            {value.lat != null && (
+              <span className="mono-12 rounded-[var(--r-instrument)] bg-[color-mix(in_srgb,var(--bg-void)_88%,transparent)] px-2.5 py-1.5 text-muted backdrop-blur">
+                {pinnedExactly ? "exact point" : pin ? `approx · ${pin.code}` : "area centre"}
+              </span>
+            )}
           </div>
+
+          {!country && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="t-14 rounded-[var(--r-row)] bg-[color-mix(in_srgb,var(--bg-void)_80%,transparent)] px-4 py-2 text-secondary backdrop-blur">
+                Choose a country above to begin
+              </span>
+            </div>
+          )}
         </div>
       )}
 
+      <p className="mono-12 text-muted">
+        {pin
+          ? "Click the globe to mark the exact parcel, or leave it on the code's centre."
+          : "Drag to rotate. Zoom follows the steps above, so the page still scrolls."}
+      </p>
+
+      {/* ---- always-live coordinates ---- */}
       <div className="grid grid-cols-2 gap-4">
         {numberField(latId, "Latitude", "lat", -90, 90)}
         {numberField(lngId, "Longitude", "lng", -180, 180)}

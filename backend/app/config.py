@@ -16,7 +16,16 @@ DATA_DIR = BASE_DIR / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 DB_PATH = DATA_DIR / "app.db"
 
-DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"
+# SQLite by default: no server, no credentials, no network — the safest
+# thing to demo. Point DATABASE_URL at Postgres or Supabase to switch;
+# SQLModel speaks both and no application code changes.
+#   postgresql+psycopg://user:pass@host:5432/dbname
+#   (Supabase gives you exactly this string under Project settings → Database)
+DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{DB_PATH.as_posix()}"
+
+
+def is_sqlite() -> bool:
+    return DATABASE_URL.startswith("sqlite")
 
 # The frontend dev server.
 CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
