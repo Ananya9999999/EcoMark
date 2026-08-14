@@ -1,18 +1,26 @@
-# Digital Carbon Credit Verification
+# EcoMark
 
-Log a real-world climate action — planting trees, installing solar, cutting a
-bill, commuting green — have it verified, earn carbon credits, and trade them
-with other users.
+Verifying real-world climate actions via satellite (NDVI) and OCR, then issuing tradeable credits on-chain. Built for SIH.
 
-This repository holds the **frontend and backend glue** scope: the Next.js
-app, the FastAPI service, the SQLite store, and the orchestration between
-them. Verification and blockchain logic are owned by other groups and are
-reached only through the two interfaces in `backend\app\integrations\`
-(mocked by default).
+---
+
+## This branch — Pair C: frontend + backend glue
+
+`Lisa-Part-C` holds the Next.js app, the FastAPI service, the database, and
+the orchestration that ties the other two pairs together.
+
+| Pair | Owns | Status on this branch |
+|---|---|---|
+| A — Verification | Satellite/NDVI, OCR pipelines | Mocked. Drops into `backend/app/integrations/verification.py` |
+| B — Blockchain | Solidity contracts, mint/transfer/swap | Mocked. Drops into `backend/app/integrations/chain.py` |
+| **C — Frontend + glue** | **Dashboard, API routes, database, full request flow** | **This branch** |
+
+Nothing here implements Pair A's or Pair B's work. Both are reached through
+two fixed interfaces, with mocks standing in until the real modules land.
 
 ## Setup
 
-Prerequisites: Node 18+, Python 3.10+.
+Prerequisites: Node 18+, Python 3.10+. Windows / PowerShell.
 
 ### Backend
 
@@ -24,14 +32,12 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-If activation is blocked: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
+If activation is blocked:
+`Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
 
-The server creates `backend\data\app.db` and seeds it on first start
-(4 users, 12 claims, 2 pending swaps). To re-seed manually:
-
-```powershell
-python -m app.seed
-```
+The database creates itself at `backend\data\app.db` on first start, with
+four login profiles and no claims. Nothing else to install — see
+[`docs/database.md`](docs/database.md).
 
 ### Frontend
 
@@ -41,27 +47,18 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open <http://localhost:3000>.
 
-## How USE_MOCKS works
+## Switching the mocks off
 
-`backend\app\integrations\__init__.py` selects the implementations at import
-time:
+`backend/app/integrations/__init__.py` picks the implementation at import time:
 
-- `USE_MOCKS=true` (the default) — `mock_verification.py` (3-second fake
-  verification) and `mock_chain.py` (in-memory balances and swaps).
-- `USE_MOCKS=false` — the real `verification.py` and `chain.py` delivered by
-  the other groups.
+- `USE_MOCKS=true` (default) — mock verification (3 s delay) and an in-memory ledger
+- `USE_MOCKS=false` — the real modules from Pair A and Pair B
 
-Set it before starting uvicorn:
-
-```powershell
-$env:USE_MOCKS = "true"
-uvicorn app.main:app --reload --port 8000
-```
-
-Everything else imports `from app.integrations import verification, chain` —
-nothing references the mock modules directly.
+Everything imports `from app.integrations import verification, chain`, so when
+the real modules arrive you drop the files in and flip the flag. No other code
+changes. See `backend/.env.example`.
 
 ## Tests
 
@@ -71,24 +68,25 @@ cd backend
 python -m pytest tests -q
 ```
 
-## The demo path
+49 tests cover the claim lifecycle, every validation message, the mocks, and
+the balance/trade endpoints.
 
-1. The dashboard opens with Priya's claims and balance visible.
-2. **New claim** → *Planted trees* → rotate the globe, drop a pin, set the
-   radius and both dates → **Submit claim**.
-3. The verification sequence plays (locating parcel → retrieving imagery →
-   comparing before and after → calculating), credits count up, the balance
-   in the rail moves.
-4. The claim detail shows the evidence and the location on the small globe.
-5. **Swaps** → propose a trade with Arjun.
-6. Switch the user to Arjun (bottom of the rail), accept the trade, and both
-   balances update.
+## Demo path
 
-To demonstrate the rejection path, submit an OCR claim with action type
-`fail_test` via the API — the mock always rejects it.
+1. Landing page — press **Enter**
+2. Choose a profile (no passwords; this is a demo device, not authentication)
+3. **Log action** → *Planted trees* → pick country → state → city → PIN code,
+   then click the globe for the exact parcel
+4. Set both dates, **Submit claim** — the verification sequence plays and
+   credits are minted
+5. **Trades** → propose a swap, switch profile, accept it, watch both balances move
 
-## Design
+Sample data for a rehearsal: `python -m app.seed --demo`
 
-The interface derives from `docs\design.md` — palette from satellite and
-vegetation-index imagery, IBM Plex + Bricolage Grotesque type, and the globe
-as the coordinate input. Read that file for the reasoning.
+To guarantee no simulated ledger failures during a live demo, set
+`MOCK_CHAIN_FAILURES=false`.
+
+## Docs
+
+- [`docs/design.md`](docs/design.md) — palette, type, layout, 3D and motion
+- [`docs/database.md`](docs/database.md) — what the database is and how to use it
