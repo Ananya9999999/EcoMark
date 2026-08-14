@@ -83,6 +83,10 @@ export default function ClaimDetailPage({ params }: { params: Promise<{ id: stri
   }, [id, refreshBalance]);
 
   useEffect(() => {
+    // Clear first: on a user switch the previous user's claim must not stay
+    // on screen underneath a "not found" error.
+    setClaim(null);
+    setError(null);
     load();
   }, [load, currentUserId]);
 

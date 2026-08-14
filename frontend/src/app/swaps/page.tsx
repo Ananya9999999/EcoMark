@@ -42,7 +42,7 @@ function categorySelect(
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value as CreditCategory)}
-      className="input-instrument"
+      className="input-instrument text-sm"
     >
       {CATEGORIES.map((c) => (
         <option key={c} value={c}>
@@ -142,7 +142,7 @@ function ProposePanel({ onCreated }: { onCreated: () => void }) {
               id="swap-counterparty"
               value={counterparty}
               onChange={(e) => setCounterparty(e.target.value)}
-              className="input-instrument w-full max-w-xs"
+              className="input-instrument w-full max-w-xs text-sm"
             >
               {users.map((u) => (
                 <option key={u.id} value={u.id}>

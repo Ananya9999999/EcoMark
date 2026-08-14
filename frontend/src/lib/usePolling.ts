@@ -1,22 +1,29 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export const POLL_INTERVAL_MS = 2000;
 
 /**
- * Polls `fn` every POLL_INTERVAL_MS while `active` is true. The interval is
- * created once per activation, not per data update, and is cleaned up on
- * deactivation and unmount.
+ * Polls `fn` every POLL_INTERVAL_MS while `active` is true.
+ *
+ * The interval is keyed on `active` alone so it is not torn down and rebuilt
+ * on every response, but it always invokes the latest `fn` through a ref —
+ * otherwise a caller whose loader closes over changing state (the claim
+ * filters) could keep polling with a stale closure.
  */
 export function usePolling(fn: () => void, active: boolean): void {
+  const latest = useRef(fn);
+
+  // Written in an effect, not during render — refs must not be mutated
+  // while rendering.
+  useEffect(() => {
+    latest.current = fn;
+  }, [fn]);
+
   useEffect(() => {
     if (!active) return;
-    const interval = window.setInterval(fn, POLL_INTERVAL_MS);
+    const interval = window.setInterval(() => latest.current(), POLL_INTERVAL_MS);
     return () => window.clearInterval(interval);
-    // fn is intentionally not a dependency: pages pass stable useCallback
-    // loaders, and re-keying the interval on loader identity would defeat
-    // the point of this hook.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 }

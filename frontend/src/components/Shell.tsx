@@ -108,7 +108,7 @@ function UserSwitcher() {
         value={currentUserId ?? ""}
         onChange={(e) => switchUser(e.target.value)}
         disabled={users.length === 0}
-        className="w-full input-instrument disabled:opacity-50"
+        className="input-instrument w-full text-sm disabled:opacity-50"
       >
         {users.length === 0 ? (
           <option value="">No users</option>

@@ -78,10 +78,14 @@ function RecentClaims() {
   const [error, setError] = useState<string | null>(null);
   const { currentUserId, refreshBalance } = useApp();
   const hadLive = useRef(false);
+  // Drop responses for a user we have already switched away from.
+  const seq = useRef(0);
 
   const load = useCallback(() => {
+    const mySeq = ++seq.current;
     listClaims({ limit: 5 })
       .then((list) => {
+        if (mySeq !== seq.current) return;
         setClaims(list.claims);
         setError(null);
         const hasLive = list.claims.some((c) => !isTerminal(c.status));
@@ -89,11 +93,15 @@ function RecentClaims() {
         if (hadLive.current && !hasLive) refreshBalance();
         hadLive.current = hasLive;
       })
-      .catch((e) => setError(messageFrom(e, "Recent claims could not be loaded")));
+      .catch((e) => {
+        if (mySeq !== seq.current) return;
+        setError(messageFrom(e, "Recent claims could not be loaded"));
+      });
   }, [refreshBalance]);
 
   useEffect(() => {
     setClaims(null);
+    hadLive.current = false;
     load();
   }, [load, currentUserId]);
 

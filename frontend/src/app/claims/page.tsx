@@ -74,7 +74,7 @@ export default function ClaimsPage() {
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="input-instrument"
+        className="input-instrument text-sm"
       >
         <option value="">all</option>
         {options.map((o) => (
