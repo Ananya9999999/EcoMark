@@ -35,9 +35,9 @@ uvicorn app.main:app --reload --port 8000
 If activation is blocked:
 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
 
-The database creates itself at `backend\data\app.db` on first start, with
-four login profiles and no claims. Nothing else to install — see
-[`docs/database.md`](docs/database.md).
+The database is SQLite and creates itself at `backend\data\app.db` on
+first start, with four login profiles and no claims. Nothing to install
+or configure.
 
 ### Frontend
 
@@ -85,8 +85,3 @@ Sample data for a rehearsal: `python -m app.seed --demo`
 
 To guarantee no simulated ledger failures during a live demo, set
 `MOCK_CHAIN_FAILURES=false`.
-
-## Docs
-
-- [`docs/design.md`](docs/design.md) — palette, type, layout, 3D and motion
-- [`docs/database.md`](docs/database.md) — what the database is and how to use it
