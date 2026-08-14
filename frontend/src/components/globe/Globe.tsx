@@ -20,7 +20,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 import { latLngToVector3, radiusCirclePoints, vector3ToLatLng } from "./coords";
 
-/** The --limb accent from docs/design.md. Three.js cannot read CSS custom
+/** The --limb accent from the design brief. Three.js cannot read CSS custom
  * properties, so the token is mirrored here — change both together. */
 const ACCENT = "#5cc8db";
 const ACCENT_RGB = new THREE.Color(ACCENT);

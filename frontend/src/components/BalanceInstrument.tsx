@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Balance as one calibrated instrument, not four stat cards (design.md §4).
+ * Balance as one calibrated instrument, not four stat cards.
  * A single bar divided into four category segments over a tick scale, with
  * the total in 40px mono. The segments are the chart.
  */

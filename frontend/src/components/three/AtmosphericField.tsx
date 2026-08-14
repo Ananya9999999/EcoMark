@@ -3,7 +3,7 @@
 /**
  * Wraps the particle canvas with its fallback. Lazy-loads the canvas so it
  * never delays first paint, and renders a designed static field instead when
- * any of the four fallback conditions holds (design.md §5).
+ * any of the four fallback conditions holds.
  */
 
 import dynamic from "next/dynamic";

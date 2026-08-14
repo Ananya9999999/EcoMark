@@ -2,7 +2,7 @@
 
 /**
  * Overview. The atmospheric field sits behind the header, its order and
- * colour mix driven by the user's real balance (design.md §5).
+ * colour mix driven by the user's real balance.
  */
 
 import Link from "next/link";

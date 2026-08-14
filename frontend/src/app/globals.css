@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 /*
- * EcoMark — every value derives from docs/design.md.
+ * EcoMark — every value is defined in this file.
  * Direction: atmospheric instrumentation. Dark green-cast ground, one
  * luminous signal, four bound category hues. No blue in the chrome.
  */
 
 :root {
-  /* ground and surfaces (design.md §2) */
+  /* ground and surfaces  */
   --bg-void: #070b0a;
   --bg-surface: #0f1614;
   --bg-elevated: #16201d;
@@ -53,7 +53,7 @@
   --r-row: 6px;
   --r-panel: 14px;
 
-  /* motion tokens (design.md §6) */
+  /* motion tokens  */
   --d-instant: 80ms;
   --d-quick: 160ms;
   --d-base: 280ms;
@@ -243,7 +243,7 @@ body {
   to { background-position: -80% 0; }
 }
 
-/* single attention shake for errors (design.md §6) */
+/* single attention shake for errors  */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Landing — the one moment of spectacle (design.md §5).
+ * Landing — the one moment of spectacle.
  *
  * Particles coalesce into the EcoMark seal. Pressing Enter disperses it and
  * moves into the app. After this, the interface stays quiet: the subject is

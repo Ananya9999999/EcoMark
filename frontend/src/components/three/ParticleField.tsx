@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The atmospheric field — the signature element (design.md §5).
+ * The atmospheric field — the signature element.
  *
  * One InstancedMesh, one draw call. Particles drift as a diffuse cloud
  * (unmeasured carbon) and can be pulled into an ordered target formation
