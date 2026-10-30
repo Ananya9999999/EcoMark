@@ -50,8 +50,18 @@ BALANCE_CACHE_SECONDS = 5
 
 
 def use_mocks() -> bool:
-    """Whether the mock integrations are active. Defaults to true."""
-    return os.getenv("USE_MOCKS", "true").lower() == "true"
+    """True when the chain is still on the in-memory mock (seed sync)."""
+    master = os.getenv("USE_MOCKS")
+    if master is not None:
+        return master.lower() == "true"
+    return os.getenv("USE_MOCK_CHAIN", "true").lower() == "true"
+
+
+def use_mock_verification() -> bool:
+    master = os.getenv("USE_MOCKS")
+    if master is not None:
+        return master.lower() == "true"
+    return os.getenv("USE_MOCK_VERIFICATION", "true").lower() == "true"
 
 
 def ensure_directories() -> None:
