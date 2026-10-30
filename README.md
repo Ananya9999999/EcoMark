@@ -4,100 +4,140 @@ Verifying real-world climate actions via satellite (NDVI) and OCR, then issuing 
 
 Built for Smart India Hackathon 2026.
 
-## What this is
+## One picture
 
-Most carbon credit systems are built for institutions — solar farms, forestry projects — and verified through slow, expensive third-party audits. EcoMark verifies individual and community-level climate actions instead, using the right verification method for each action type, and issues credits that can be **traded directly between people** (barter-style), not just sold on a marketplace.
+EcoMark is a platform where people earn credits for climate-friendly actions, **only after the action has been independently checked**. They can then trade those credits with each other.
 
-**Verification is two-tier, matched to what's actually observable:**
+## The problem it fixes
 
-| Action type | Example | Verification method |
+Traditional carbon credits are built for big institutions and verified by slow, expensive audits. An ordinary person who plants trees or cuts their electricity use has no trusted way to prove it, and nothing useful to do with the reward. Credit systems also suffer from fake claims and double counting, where the same action is sold twice.
+
+## How it works
+
+1. A user submits a claim: “I planted trees here,” “I reduced my electricity use,” “I installed solar,” or “I commute by bike.”
+2. The system checks the claim with a method that fits the kind of action.
+3. If the claim holds up, the user is awarded credits. The number depends on how strong and how large the verified impact is.
+4. The credits are recorded on a blockchain ledger (ERC-1155), so nobody can edit history, claim the same action twice, or spend the same credit twice.
+5. Users can swap credits with each other (e.g. energy ↔ transport); every swap is recorded permanently.
+
+## Verification methods
+
+| Action | Method | How it works |
 |---|---|---|
-| Land / community | Tree planting, pond restoration | Satellite imagery (Sentinel-2), NDVI change detection |
-| Energy / water | Reduced electricity or water use | OCR on utility bills + trend comparison |
-| Purchases | EV, solar panels, sustainable products | OCR on receipts + category matching |
-| Commute *(stretch goal)* | Biking / walking instead of driving | GPS trip logs, route-matching |
-
-Verified actions mint credits on a Polygon-based ledger, which users can swap with each other across categories (e.g. energy credits for transport credits) — the ledger prevents double-counting and double-spending.
-
-## Tech stack
-
-- **Frontend:** Next.js, TypeScript, Tailwind
-- **Backend:** FastAPI (Python)
-- **Verification:** Google Earth Engine API (satellite/NDVI), Tesseract OCR
-- **Blockchain:** Solidity (ERC-1155), Polygon Amoy testnet, web3.py
+| Tree planting / land | Satellite (NDVI) | Sentinel-2 before/after greenness via Google Earth Engine |
+| Energy / water reduction | OCR on utility bills | Tesseract extracts consumption; compares against baseline |
+| Purchases (solar, EV) | OCR on invoices | Vendor, amount, and item matching |
+| Commute | GPS trip log | Low-carbon trip heuristics (demo may use simulated result) |
 
 ## Project structure
 
 ```
-ecomark/
-├── frontend/           # Next.js dashboard — claims, balance, swap marketplace
+EcoMark/
+├── frontend/                 # Next.js dashboard — claims, balance, swaps
 ├── backend/
-│   ├── verification/   # Satellite + OCR pipelines, verification endpoints
-│   └── api/            # Routes tying verification + blockchain + frontend together
-├── contracts/          # Solidity smart contracts, deploy scripts
+│   ├── app/                  # FastAPI app (routes, services, models)
+│   │   └── integrations/     # verification + chain (mock or real)
+│   ├── verification/         # Real satellite + OCR pipelines
+│   └── tests/
+├── contracts/                # Solidity CreditRegistry (ERC-1155) + Hardhat
+├── blockchain/               # Pair-B reference scripts (optional standalone API)
+├── requirements.txt
 ├── .env.example
-├── CONTRIBUTING.md
 └── README.md
 ```
 
-## Getting started
-
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- A Google Earth Engine account registered for non-commercial use ([sign up](https://earthengine.google.com/))
-- Tesseract OCR installed locally (`sudo apt install tesseract-ocr` / `brew install tesseract`)
-- A funded wallet on Polygon Amoy testnet ([faucet](https://faucet.polygon.technology/))
-
-### Setup
+## Quick start (demo — mocks, no keys)
 
 ```bash
-git clone <repo-url>
-cd ecomark
-cp .env.example .env   # fill in your own keys
-```
+# Backend
+cd backend
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r ../requirements.txt
+export USE_MOCKS=true
+export MOCK_CHAIN_FAILURES=false
+uvicorn app.main:app --reload --app-dir .
 
-**Verification service (Pair A)**
-```bash
-cd backend/verification
-pip install -r requirements.txt
-earthengine authenticate   # one-time browser login
-python satellite.py        # sanity check: should print NDVI data for a test location
-python ocr.py path/to/sample_bill.jpg   # sanity check: should print extracted text
-```
-
-**Contracts (Pair B)**
-```bash
-cd contracts
-npm install
-npx hardhat compile
-npx hardhat run scripts/deploy.js --network amoy
-```
-
-**Frontend + API (Pair C)**
-```bash
+# Frontend (other terminal)
 cd frontend
 npm install
 npm run dev
-
-# in a separate terminal
-cd backend/api
-pip install -r requirements.txt
-uvicorn main:app --reload
 ```
 
-## Team
+Open http://localhost:3000 — login as any seeded user (Priya, Arjun, Meera, Kabir).
 
-6-person team, split into three pairs:
-- **Verification** — satellite + OCR pipelines
-- **Blockchain** — smart contracts, minting, swaps
-- **Frontend/Backend** — dashboard, claim flow, integration glue
+Optional demo data:
 
-See `CONTRIBUTING.md` for branching and PR conventions.
+```bash
+cd backend && python -m app.seed --demo
+```
+
+## Real blockchain (local Hardhat)
+
+```bash
+cd contracts
+npm install
+npx hardhat node          # terminal 1 — keeps chain running
+npm run deploy:local      # terminal 2 — prints CONTRACT_ADDRESS
+```
+
+Copy the printed address and Hardhat account #0 key into `backend/.env`:
+
+```env
+USE_MOCKS=false
+LOCAL_RPC=http://127.0.0.1:8545
+PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+CONTRACT_ADDRESS=0x...
+```
+
+Then restart the backend. Category mapping on-chain: `land=1`, `energy=2`, `water=3`, `transport=4`. Amounts use 4 decimal places (1.0 credit = 10_000 base units).
+
+### Contract tests
+
+```bash
+cd contracts && npm test
+```
+
+## Real verification
+
+- **Satellite:** `earthengine authenticate`, set `EE_PROJECT`, `USE_MOCKS=false`.
+- **OCR:** install Tesseract (`apt install tesseract-ocr` / `brew install tesseract`).
+- The app can still force mocks with `USE_MOCKS=true` as a stage-safe backup.
+
+## API surface (backend)
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | Liveness |
+| GET | `/api/users` | Seeded profiles |
+| POST | `/api/claims` | Submit claim (+ optional file) |
+| GET | `/api/claims` | List claims |
+| GET | `/api/claims/{id}` | Claim detail |
+| POST | `/api/claims/{id}/retry` | Retry mint after `mint_failed` |
+| GET | `/api/balance` | On-chain (or mock) balances |
+| POST | `/api/swaps` | Propose category swap |
+| POST | `/api/swaps/{id}/accept` | Accept + settle on ledger |
+| POST | `/api/swaps/{id}/reject` | Reject offer |
+
+Auth is demo-style: pass `X-User-Id: usr_priya001` (defaults to first user).
+
+## Team split
+
+- **Verification** — satellite + OCR pipelines (`backend/verification/`)
+- **Blockchain** — `CreditRegistry.sol`, `chain.py`, deploy scripts
+- **Frontend/Backend** — Next.js UI + FastAPI claim/swap pipeline
 
 ## Status
 
-🚧 Active hackathon build. See open issues/PRs for current progress.
+| Piece | State |
+|---|---|
+| Satellite NDVI | Live Earth Engine path + mock fallback |
+| OCR bills/invoices | Built; energy baseline may use placeholder without history |
+| Commute GPS | Simulated path available for demos |
+| Mock end-to-end flow | Reliable stage switch (`USE_MOCKS=true`) |
+| ERC-1155 registry | Implemented + Hardhat tests |
+| Mint / balance / atomic swap | Real `chain.py` wired to contract |
+| Double-claim prevention | `usedClaims` mapping on-chain |
 
 ## License
 

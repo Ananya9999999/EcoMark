@@ -37,7 +37,7 @@ export function formatDateTime(iso: string | null | undefined): string {
 export function formatLatLng(lat: number, lng: number): string {
   const ns = lat >= 0 ? "N" : "S";
   const ew = lng >= 0 ? "E" : "W";
-  return `${Math.abs(lat).toFixed(4)}° ${ns}, ${Math.abs(lng).toFixed(4)}° ${ew}`;
+  return `${Math.abs(lat).toFixed(6)}° ${ns}, ${Math.abs(lng).toFixed(6)}° ${ew}`;
 }
 
 export function formatRadius(radiusM: number): string {

@@ -38,7 +38,7 @@ export function radiusCirclePoints(
   lngDeg: number,
   radiusM: number,
   sphereRadius = 1,
-  segments = 96,
+  segments = 128,
 ): THREE.Vector3[] {
   const EARTH_RADIUS_M = 6_371_000;
   const angular = radiusM / EARTH_RADIUS_M; // angular radius in radians

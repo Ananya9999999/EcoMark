@@ -121,25 +121,66 @@ export function offlinePins(cityName: string): Place[] {
 /** Camera distance per funnel level — smaller is closer in. */
 export const ZOOM = {
   world: 3.0,
-  country: 2.15,
-  region: 1.78,
-  city: 1.5,
-  pin: 1.32,
+  country: 2.05,
+  region: 1.65,
+  city: 1.38,
+  pin: 1.12,
 } as const;
 
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 
 async function nominatim(params: Record<string, string>): Promise<Place[]> {
-  const query = new URLSearchParams({ format: "json", limit: "6", ...params });
+  const query = new URLSearchParams({
+    format: "json",
+    addressdetails: "1",
+    dedupe: "1",
+    limit: "8",
+    ...params,
+  });
   try {
-    const res = await fetch(`${NOMINATIM}?${query}`, { headers: { Accept: "application/json" } });
+    const res = await fetch(`${NOMINATIM}?${query}`, {
+      headers: {
+        Accept: "application/json",
+        // Nominatim usage policy requires a descriptive User-Agent.
+        "User-Agent": "EcoMark/1.0 (carbon-credit-verification; demo)",
+      },
+    });
     if (!res.ok) return [];
-    const rows = (await res.json()) as { display_name: string; lat: string; lon: string }[];
-    return rows.map((r) => ({
-      name: r.display_name.split(",").slice(0, 2).join(",").trim(),
-      lat: Number(r.lat),
-      lng: Number(r.lon),
-    }));
+    const rows = (await res.json()) as {
+      display_name: string;
+      lat: string;
+      lon: string;
+      type?: string;
+      class?: string;
+      importance?: number;
+    }[];
+    // Prefer settlements / admin areas over POIs and roads for the city funnel.
+    const ranked = [...rows].sort((a, b) => {
+      const score = (r: (typeof rows)[0]) => {
+        let s = r.importance ?? 0;
+        if (r.class === "place" || r.class === "boundary") s += 1;
+        if (["city", "town", "village", "suburb", "county", "state"].includes(r.type ?? "")) s += 0.5;
+        return s;
+      };
+      return score(b) - score(a);
+    });
+    // Deduplicate near-identical coordinates (same ~11 m cell).
+    const seen = new Set<string>();
+    const out: Place[] = [];
+    for (const r of ranked) {
+      const lat = Number(Number(r.lat).toFixed(5));
+      const lng = Number(Number(r.lon).toFixed(5));
+      const key = `${lat},${lng}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        name: r.display_name.split(",").slice(0, 3).join(",").trim(),
+        lat: Number(r.lat),
+        lng: Number(r.lon),
+      });
+      if (out.length >= 6) break;
+    }
+    return out;
   } catch {
     return []; // offline: the curated lists still work
   }
@@ -152,9 +193,19 @@ export function searchCities(
   regionName?: string,
 ): Promise<Place[]> {
   if (query.trim().length < 2) return Promise.resolve([]);
+  const q = regionName ? `${query}, ${regionName}` : query;
   return nominatim({
-    q: regionName ? `${query}, ${regionName}` : query,
+    q,
     countrycodes: countryCode.toLowerCase(),
+    // Favour named places over arbitrary POIs.
+    featuretype: "settlement",
+  }).then(async (rows) => {
+    if (rows.length > 0) return rows;
+    // Fallback without featuretype — some regions only resolve as admin boundaries.
+    return nominatim({
+      q,
+      countrycodes: countryCode.toLowerCase(),
+    });
   });
 }
 
