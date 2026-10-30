@@ -136,7 +136,7 @@ function EarthScene({
 }: Omit<GlobeProps, "className" | "onContextLost">) {
   const texture = useLoader(THREE.TextureLoader, "/earth_day.jpg");
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
+  texture.anisotropy = 16;
 
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const { camera, invalidate } = useThree();
@@ -217,7 +217,8 @@ function EarthScene({
     const down = downAt.current;
     if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return;
     const { lat: pickedLat, lng: pickedLng } = vector3ToLatLng(e.point);
-    onPick(Number(pickedLat.toFixed(4)), Number(pickedLng.toFixed(4)));
+    // 6 decimal places ≈ 0.11 m at the equator — enough for a parcel pin
+    onPick(Number(pickedLat.toFixed(6)), Number(pickedLng.toFixed(6)));
   };
 
   return (
@@ -225,7 +226,7 @@ function EarthScene({
       <ambientLight intensity={1.15} />
       <directionalLight position={[5, 3, 5]} intensity={1.6} />
       <mesh onClick={handleClick} onPointerDown={handlePointerDown}>
-        <sphereGeometry args={[1, 64, 64]} />
+        <sphereGeometry args={[1, 128, 128]} />
         <meshStandardMaterial map={texture} roughness={0.9} metalness={0} />
       </mesh>
       <Atmosphere />
@@ -235,14 +236,15 @@ function EarthScene({
         <OrbitControls
           ref={controlsRef}
           enablePan={false}
-          // Wheel zoom is off on purpose: it used to swallow the page scroll,
-          // trapping the user on this section. The funnel sets the zoom level.
-          enableZoom={false}
+          // Wheel zoom only while the pointer is over the canvas (not the page).
+          // Closer minDistance lets the pin sit at parcel / street scale.
+          enableZoom
+          zoomSpeed={0.85}
           enableDamping
           dampingFactor={0.08}
-          rotateSpeed={0.55}
-          autoRotateSpeed={0.4}
-          minDistance={1.2}
+          rotateSpeed={0.45}
+          autoRotateSpeed={0.35}
+          minDistance={1.05}
           maxDistance={4.5}
         />
       )}
@@ -255,8 +257,8 @@ export default function Globe({ className, onContextLost, ...props }: GlobeProps
   return (
     <div className={className} aria-hidden>
       <Canvas
-        camera={{ position: [0, 0.6, 2.6], fov: 45 }}
-        dpr={[1, 2]}
+        camera={{ position: [0, 0.6, 2.6], fov: 40, near: 0.01, far: 20 }}
+        dpr={[1, 2.5]}
         gl={{ antialias: true, alpha: true }}
         // The static mini globe renders only when something changes.
         frameloop={interactive ? "always" : "demand"}

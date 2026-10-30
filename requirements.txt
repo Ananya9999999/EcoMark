@@ -1,7 +1,13 @@
 fastapi
 uvicorn[standard]
-pytesseract
-pillow
-earthengine-api
+sqlmodel
+pydantic
 python-multipart
 python-dotenv
+pillow
+pytesseract
+earthengine-api
+web3>=6.0.0
+eth-account
+httpx
+pytest

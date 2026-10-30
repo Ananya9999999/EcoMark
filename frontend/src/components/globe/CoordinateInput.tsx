@@ -231,11 +231,11 @@ export function CoordinateInput({
       <input
         id={id}
         type="number"
-        step="0.0001"
+        step="0.000001"
         min={min}
         max={max}
         value={value[field] ?? ""}
-        placeholder="0.0000"
+        placeholder="0.000000"
         onChange={(e) => {
           const raw = e.target.value;
           onChange({ ...value, [field]: raw === "" ? null : Number(raw) });
@@ -305,8 +305,8 @@ export function CoordinateInput({
                 aria-label="Matching cities"
                 className="panel-elevated absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-auto py-1"
               >
-                {cityHits.map((c) => (
-                  <li key={`${c.name}-${c.lat}`}>
+                {cityHits.map((c, i) => (
+                  <li key={`${c.name}-${c.lat}-${c.lng}-${i}`}>
                     <button
                       type="button"
                       onClick={() => pickCity(c)}
