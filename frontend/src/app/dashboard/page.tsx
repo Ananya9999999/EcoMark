@@ -158,15 +158,15 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
         <RecentActivity />
 
-        <section className="panel flex flex-col items-start gap-3 p-6">
+        <section className="panel panel-interactive flex flex-col items-start gap-3 p-6">
           <span className="t-label">Next</span>
           <h2 className="t-20 text-primary">Log an action</h2>
           <p className="t-14 text-secondary">
-            Coordinates for land claims, a bill or invoice for energy and
-            water, a trip log for commuting. Verification runs automatically.
+            Land claims need a place on the map. Energy and water need a bill.
+            Commutes need a trip log. Verification runs the moment you submit.
           </p>
           <Link href="/claims/new" className="mt-2">
-            <Button>Log an action</Button>
+            <Button>Log an action →</Button>
           </Link>
 
           <dl className="mt-6 grid w-full grid-cols-2 gap-4 border-t border-line pt-5">

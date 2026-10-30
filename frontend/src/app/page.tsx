@@ -89,7 +89,7 @@ export default function Landing() {
         </motion.p>
 
         <motion.h1
-          className="t-64 text-primary"
+          className="t-64 text-primary tracking-tight"
           style={{ letterSpacing: "-0.04em" }}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

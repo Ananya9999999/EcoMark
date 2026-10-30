@@ -92,22 +92,22 @@ export default function LoginPage() {
                 >
                   <button
                     onClick={() => choose(u.id)}
-                    className="field flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:border-signal"
+                    className="field panel-interactive flex w-full items-center gap-3 px-4 py-3.5 text-left hover:border-signal hover:bg-[var(--signal-wash)]"
                     style={{ borderRadius: "var(--r-row)" }}
                   >
                     <span
                       aria-hidden
-                      className="mono-14 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-elevated text-signal"
+                      className="mono-14 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-elevated text-signal"
                     >
                       {u.name.charAt(0)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="t-14 block text-primary">{u.name}</span>
+                      <span className="t-14 block font-medium text-primary">{u.name}</span>
                       <span className="mono-12 block truncate text-muted">
                         {u.wallet_address.slice(0, 14)}…{u.wallet_address.slice(-4)}
                       </span>
                     </span>
-                    <span aria-hidden className="mono-12 text-muted">
+                    <span aria-hidden className="mono-12 text-signal opacity-70">
                       →
                     </span>
                   </button>

@@ -263,6 +263,123 @@ body {
   background-size: 8.3333% 100%;
 }
 
+
+/* ----- interactive surfaces ----- */
+
+.panel-interactive {
+  transition:
+    border-color var(--d-quick) var(--ease-out),
+    transform var(--d-quick) var(--ease-out),
+    box-shadow var(--d-base) var(--ease-out);
+}
+.panel-interactive:hover {
+  border-color: var(--signal-dim);
+  transform: translateY(-1px);
+  box-shadow: var(--edge), 0 20px 40px -18px rgba(0, 0, 0, 0.75);
+}
+
+.field:focus-visible {
+  outline: none;
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-wash);
+}
+
+/* soft ambient vignette behind main content on large screens */
+.page-glow {
+  position: relative;
+}
+.page-glow::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: -12% -8% auto;
+  height: 42%;
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    rgba(110, 231, 168, 0.06),
+    transparent 70%
+  );
+  z-index: 0;
+}
+.page-glow > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* sticky action bar for long forms */
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin-left: -1rem;
+  margin-right: -1rem;
+  padding: 1rem;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--bg-void) 96%, transparent) 55%,
+    transparent
+  );
+  backdrop-filter: blur(8px);
+}
+@media (min-width: 768px) {
+  .action-bar {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* progress rail for multi-step flows */
+.step-rail {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.step-rail .step-dot {
+  height: 6px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background var(--d-base) var(--ease-out), box-shadow var(--d-base) var(--ease-out);
+}
+.step-rail .step-dot[data-done="true"] {
+  background: var(--signal-dim);
+}
+.step-rail .step-dot[data-active="true"] {
+  background: var(--signal);
+  box-shadow: 0 0 12px rgba(110, 231, 168, 0.45);
+}
+
+/* calm error banner */
+.banner-error {
+  border: 1px solid color-mix(in srgb, var(--alert) 45%, var(--line));
+  background: var(--alert-wash);
+  color: var(--alert);
+  border-radius: var(--r-row);
+  padding: 0.75rem 1rem;
+}
+
+.banner-ok {
+  border: 1px solid color-mix(in srgb, var(--signal) 40%, var(--line));
+  background: var(--signal-wash);
+  color: var(--signal);
+  border-radius: var(--r-row);
+  padding: 0.75rem 1rem;
+}
+
+/* nav link soft fill on desktop */
+.nav-link-active-desktop::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0.5rem;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--signal);
+  box-shadow: 0 0 10px rgba(110, 231, 168, 0.7);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
   *, *::before, *::after {
