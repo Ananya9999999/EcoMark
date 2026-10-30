@@ -132,13 +132,24 @@ export default function NewClaimPage() {
 
   if (!ready) return null;
 
+  const step = !action ? 1 : 2;
+  const canSubmit = !!action && !validationError && !submitting;
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
       <header>
         <span className="t-label">New record</span>
         <h1 className="t-40 mt-2 text-primary">Log an action</h1>
-        <p className="t-14 mt-2 text-secondary">
-          Choose what you did. The verification method follows from the action.
+        <p className="t-14 mt-2 max-w-xl text-secondary">
+          Choose what you did. Verification method and evidence follow from the
+          action — nothing is taken on trust.
+        </p>
+        <div className="step-rail mt-6 max-w-xs" aria-hidden>
+          <span className="step-dot" data-active={step === 1} data-done={step > 1} />
+          <span className="step-dot" data-active={step === 2} data-done={false} />
+        </div>
+        <p className="mono-12 mt-2 text-muted">
+          Step {step} of 2 · {step === 1 ? "Pick an action" : "Add evidence"}
         </p>
       </header>
 
@@ -166,10 +177,10 @@ export default function NewClaimPage() {
                   setError(null);
                   setFile(null);
                 }}
-                className={`flex flex-col gap-2 rounded-[var(--r-row)] border p-4 text-left transition-all duration-[var(--d-quick)] ${
+                className={`panel-interactive flex flex-col gap-2 rounded-[var(--r-row)] border p-4 text-left ${
                   active
-                    ? "border-signal bg-[var(--signal-wash)]"
-                    : "border-line bg-surface hover:-translate-y-px hover:border-signal-dim"
+                    ? "border-signal bg-[var(--signal-wash)] shadow-[0_0_0_1px_rgba(110,231,168,0.25)]"
+                    : "border-line bg-surface"
                 }`}
               >
                 <span className="flex items-center gap-2">
@@ -252,23 +263,25 @@ export default function NewClaimPage() {
 
       {/* Step 3 — submit */}
       {action && (
-        <section className="flex flex-col gap-3">
+        <section className="action-bar flex flex-col gap-3 pt-2">
           <div className="flex items-baseline gap-3">
             <span className="mono-12 text-signal">03</span>
             <span className="t-label">Submit</span>
           </div>
           {error && (
-            <p role="alert" className="t-14 shake text-[var(--alert)]">
+            <p role="alert" className="banner-error t-14 shake">
               {error}
             </p>
           )}
-          <div className="flex items-center gap-3">
-            <Button onClick={submit} disabled={submitting}>
+          <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="t-14 text-secondary">
+              {validationError
+                ? validationError
+                : "Ready to verify. Credits mint only after the check passes."}
+            </p>
+            <Button onClick={submit} disabled={!canSubmit} className="shrink-0">
               {submitting ? "Submitting…" : "Submit claim"}
             </Button>
-            {validationError && !error && (
-              <span className="mono-12 text-muted">{validationError}</span>
-            )}
           </div>
         </section>
       )}

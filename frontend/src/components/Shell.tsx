@@ -27,14 +27,17 @@ const BARE_ROUTES = ["/", "/login"];
 
 function Wordmark() {
   return (
-    <Link href="/dashboard" className="flex shrink-0 items-center gap-2">
+    <Link
+      href="/dashboard"
+      className="group flex shrink-0 items-center gap-2.5 rounded-[var(--r-row)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--signal)]"
+    >
       <Image
         src="/mark.png"
         alt=""
         width={28}
         height={28}
         priority
-        className="h-7 w-7 shrink-0"
+        className="h-7 w-7 shrink-0 transition-transform duration-[var(--d-quick)] group-hover:scale-105"
       />
       <span
         className="font-display text-primary"
@@ -70,13 +73,13 @@ function NavTabs({
             href={item.href}
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
-            className={`t-14 relative whitespace-nowrap transition-colors ${
-              vertical ? "rounded-[var(--r-row)] px-3 py-2.5" : "px-3 py-2"
+            className={`t-14 relative whitespace-nowrap transition-[color,background-color,transform] duration-[var(--d-quick)] ease-[var(--ease-out)] ${
+              vertical ? "rounded-[var(--r-row)] px-3 py-2.5" : "rounded-[var(--r-row)] px-3 py-2"
             } ${
               active
                 ? vertical
-                  ? "bg-[var(--signal-wash)] text-signal"
-                  : "text-signal"
+                  ? "bg-[var(--signal-wash)] font-medium text-signal"
+                  : "font-medium text-signal"
                 : "text-secondary hover:bg-[var(--muted-wash)] hover:text-primary"
             }`}
           >
@@ -87,9 +90,9 @@ function NavTabs({
                 className={
                   vertical
                     ? "absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-signal"
-                    : "absolute inset-x-2 -bottom-px h-px bg-signal"
+                    : "absolute inset-x-2.5 -bottom-px h-0.5 rounded-full bg-signal"
                 }
-                style={{ boxShadow: "0 0 8px rgba(110,231,168,0.8)" }}
+                style={{ boxShadow: "0 0 10px rgba(110,231,168,0.85)" }}
               />
             )}
           </Link>
@@ -236,9 +239,9 @@ function ShellInner({ children }: { children: ReactNode }) {
 
       <main
         id="main"
-        className="min-w-0 flex-1 px-4 pb-16 pt-20 md:ml-56 md:px-8 md:pb-20 md:pt-10 lg:px-12"
+        className="min-w-0 flex-1 px-4 pb-20 pt-20 md:ml-56 md:px-8 md:pb-24 md:pt-12 lg:px-12"
       >
-        <div className="mx-auto w-full max-w-5xl">{children}</div>
+        <div className="page-glow mx-auto w-full max-w-5xl">{children}</div>
       </main>
     </div>
   );
